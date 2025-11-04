@@ -1,3 +1,11 @@
+use crate::error::MonError;
+use crate::lexer::Lexer;
+use crate::parser::Parser;
+use miette::Report;
+use std::fmt::{Debug, Display, write};
+use std::fs;
+use std::sync::Arc;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct MonDocument {
     pub root: MonValue,
@@ -17,24 +25,49 @@ pub enum MonValueKind {
     Null,
     Object(Vec<Member>),
     Array(Vec<MonValue>),
-    Import(String),
     Alias(String),
+    // New enum variant for enum value access, e.g., $MyEnum.Variant
+    EnumValue { enum_name: String, variant_name: String },
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Member {
     Pair(Pair),
     Spread(String),
+    Import(ImportStatement),
+    TypeDefinition(TypeDefinition),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Pair {
     pub key: String,
     pub value: MonValue,
-    pub type_spec: Option<String>,
+    pub validation: Option<TypeSpec>,
 }
 
-// --- Type and Symbol Table Definitions ---
+#[derive(Debug, PartialEq, Clone)]
+pub struct ImportStatement {
+    pub path: String,
+    pub spec: ImportSpec,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum ImportSpec {
+    Namespace(String),
+    Named(Vec<ImportSpecifier>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ImportSpecifier {
+    pub name: String,
+    pub is_anchor: bool,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TypeDefinition {
+    pub name: String,
+    pub def_type: TypeDef,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypeDef {
@@ -50,13 +83,31 @@ pub struct StructDef {
 #[derive(Debug, PartialEq, Clone)]
 pub struct FieldDef {
     pub name: String,
-    pub field_type: String,
+    pub type_spec: TypeSpec,
     pub default_value: Option<MonValue>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct EnumDef {
     pub variants: Vec<String>,
+}
+
+// Represents a type specification, e.g., `String`, `[Number...]`
+#[derive(Debug, PartialEq, Clone)]
+pub enum TypeSpec {
+    Simple(String),
+    Collection(Vec<TypeSpec>),
+}
+
+impl Display for Member {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Member::Pair(p) => write!(f, "Pair({}: {})", p.key, p.value),
+            Member::Spread(s) => write!(f, "Spread(...*{})", s),
+            Member::Import(i) => write!(f, "Import({:?})", i),
+            Member::TypeDefinition(t) => write!(f, "TypeDef({:?})", t),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -67,5 +118,49 @@ pub struct SymbolTable {
 impl SymbolTable {
     pub fn new() -> Self {
         Self::default()
+    }
+}
+
+impl Display for MonDocument {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.root)
+    }
+}
+
+impl Display for MonValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if let Some(anchor) = &self.anchor {
+            write!(f, "&{} ", anchor)?;
+        }
+        match &self.kind {
+            MonValueKind::String(s) => write!(f, "\"{}\"", s),
+            MonValueKind::Number(n) => write!(f, "{}", n),
+            MonValueKind::Boolean(b) => write!(f, "{}", b),
+            MonValueKind::Null => write!(f, "null"),
+            MonValueKind::Object(o) => {
+                write!(f, "{{")?;
+                for (i, member) in o.iter().enumerate() {
+                    write!(f, "{}", member)?;
+                    if i < o.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, "}}")
+            }
+            MonValueKind::Array(a) => {
+                write!(f, "[")?;
+                for (i, value) in a.iter().enumerate() {
+                    write!(f, "{}", value)?;
+                    if i < a.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, "]")
+            }
+            MonValueKind::Alias(a) => write!(f, "*{}", a),
+            MonValueKind::EnumValue { enum_name, variant_name } => {
+                write!(f, "${}.{}", enum_name, variant_name)
+            }
+        }
     }
 }

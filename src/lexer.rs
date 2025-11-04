@@ -1,37 +1,6 @@
-use miette::Diagnostic;
-use std::fs;
-use thiserror::Error;
-/// Represents possible errors that can occur during lexing.
-#[derive(Error, Debug, Diagnostic)]
-#[error("Lexer Error")]
-pub enum LexerError {
-    #[error("Unable to read file: {file_path}")]
-    #[diagnostic(code(lexer::io_error))]
-    UnableToReadFile {
-        file_path: String,
-        #[source]
-        source: std::io::Error,
-    },
-
-    #[error("File not found: {file_path}")]
-    #[diagnostic(code(lexer::file_not_found))]
-    FileNotFound { file_path: String },
-    // #[error("Unknown token at line {line}, column {column}: {found}")]
-    // #[diagnostic(code(lexer::unknown_token), url("https://example.com/docs/lexer"))]
-    // UnknownToken {
-    //     line: usize,
-    //     column: usize,
-    //     found: char,
-    //     #[source_code]
-    //     src: NamedSource<String>,
-    //     #[label("Unexpected character here")]
-    //     span: SourceSpan,
-    // },
-}
-
 /// Represents the different kinds of tokens that the lexer can produce.
 /// Each token is a meaningful unit of the MON language syntax.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     // == Special Tokens ==
     /// Represents the end of the input file.
@@ -104,7 +73,7 @@ pub enum TokenType {
 }
 
 /// A token with its type and position
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub ttype: TokenType,
     pub pos_start: usize,
@@ -136,21 +105,6 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn from_file(file_path: &str) -> Result<Self, LexerError> {
-        match fs::read_to_string(file_path) {
-            Ok(contents) => Ok(Self::new(Box::leak(contents.into_boxed_str()))),
-            Err(err) => match err.kind() {
-                std::io::ErrorKind::NotFound => Err(LexerError::FileNotFound {
-                    file_path: file_path.to_string(),
-                }),
-                _ => Err(LexerError::UnableToReadFile {
-                    file_path: file_path.to_string(),
-                    source: err,
-                }),
-            },
-        }
-    }
-
     pub fn lex(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
         loop {
@@ -162,18 +116,6 @@ impl<'a> Lexer<'a> {
             tokens.push(token);
         }
         tokens
-    }
-
-    fn advance(&mut self) -> Option<char> {
-        let char = self.chars.next();
-        if let Some(c) = char {
-            self.position += c.len_utf8();
-        }
-        char
-    }
-
-    fn peek(&mut self) -> Option<&char> {
-        self.chars.peek()
     }
 
     pub fn next_token(&mut self) -> Token {
@@ -240,6 +182,18 @@ impl<'a> Lexer<'a> {
         Token::new(ttype, start_pos, self.position)
     }
 
+    fn advance(&mut self) -> Option<char> {
+        let char = self.chars.next();
+        if let Some(c) = char {
+            self.position += c.len_utf8();
+        }
+        char
+    }
+
+    fn peek(&mut self) -> Option<&char> {
+        self.chars.peek()
+    }
+
     fn read_whitespace(&mut self) -> TokenType {
         while let Some(c) = self.peek() {
             if c.is_whitespace() {
@@ -281,7 +235,6 @@ impl<'a> Lexer<'a> {
                         'r' => value.push('\r'),
                         't' => value.push('\t'),
                         _ => {
-                            // Or handle as an error
                             value.push('\\');
                             value.push(escaped_char);
                         }
@@ -449,7 +402,7 @@ mod tests {
 
     #[test]
     fn test_strings() {
-        let input = r#""hello world" "" "another""#;
+        let input = r#"hello world" "" "another"#;
         let expected = vec![
             TokenType::String("hello world".to_string()),
             TokenType::String("".to_string()),
@@ -461,11 +414,13 @@ mod tests {
 
     #[test]
     fn test_strings_with_escapes() {
-        let input = r#""hello "world"\t\n\r""#;
+        let input = r#"hello \"world\"	\n\r"#;
         let expected = vec![
-            TokenType::String("hello ".to_string()),
-            TokenType::Identifier("world".to_string()),
-            TokenType::String("\t\n\r".to_string()),
+            TokenType::String(
+                r#"hello "world"	
+"#
+                .to_string(),
+            ),
             TokenType::Eof,
         ];
         assert_tokens(input, expected);
@@ -510,9 +465,9 @@ mod tests {
     admin :: User = {
         ...*default_user,
         name: "Admin",
-    }
+        }
 }
-        "#;
+            "#;
         let expected = vec![
             TokenType::LBrace,
             TokenType::Identifier("service_name".to_string()),
@@ -558,6 +513,7 @@ mod tests {
             TokenType::RBrace,
             TokenType::Eof,
         ];
+        print!("{}", input);
         assert_tokens(input, expected);
     }
 }
