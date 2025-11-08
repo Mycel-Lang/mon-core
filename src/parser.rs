@@ -16,7 +16,11 @@ pub struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     pub fn new(source_text: &'a str) -> Result<Self, MonError> {
-        let source = Arc::new(NamedSource::new("source.mon", source_text.to_string()));
+        Self::new_with_name(source_text, "source.mon".to_string())
+    }
+
+    pub fn new_with_name(source_text: &'a str, name: String) -> Result<Self, MonError> {
+        let source = Arc::new(NamedSource::new(name, source_text.to_string()));
         let mut lexer = Lexer::new(source_text);
         let tokens: Vec<Token> = lexer
             .lex()
@@ -56,6 +60,7 @@ impl<'a> Parser<'a> {
     /// Object ::= "{" [ MemberList ] "}"
     /// MemberList ::= Member { "," Member } [ "," ]
     fn parse_object(&mut self) -> Result<MonValue, MonError> {
+        let start_token = self.current_token()?.clone();
         self.expect(TokenType::LBrace)?;
         let mut members = Vec::new();
         if !self.check(TokenType::RBrace) {
@@ -70,25 +75,33 @@ impl<'a> Parser<'a> {
                 members.push(self.parse_member()?);
             }
         }
+        let end_token = self.current_token()?.clone();
         self.expect(TokenType::RBrace)?;
         Ok(MonValue {
             kind: MonValueKind::Object(members),
             anchor: None, // Anchors are attached to values, not objects themselves
+            pos_start: start_token.pos_start,
+            pos_end: end_token.pos_end,
         })
     }
 
     /// Array ::= "[" [ ValueList ] "]"
     /// ValueList ::= Value { "," Value } [ "," ]
     fn parse_array(&mut self) -> Result<MonValue, MonError> {
+        let start_token = self.current_token()?.clone();
         self.expect(TokenType::LBracket)?;
         let mut values = Vec::new();
         if !self.check(TokenType::RBracket) {
             loop {
                 if self.check(TokenType::Spread) {
+                    let spread_start_token = self.current_token()?.clone();
                     let spread_name = self.parse_spread()?;
+                    let spread_end_token = self.current_token_before_advance()?.clone(); // Get token before advance
                     values.push(MonValue {
                         kind: MonValueKind::ArraySpread(spread_name),
                         anchor: None,
+                        pos_start: spread_start_token.pos_start,
+                        pos_end: spread_end_token.pos_end,
                     });
                 } else {
                     values.push(self.parse_value()?);
@@ -102,10 +115,13 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+        let end_token = self.current_token()?.clone();
         self.expect(TokenType::RBracket)?;
         Ok(MonValue {
             kind: MonValueKind::Array(values),
             anchor: None,
+            pos_start: start_token.pos_start,
+            pos_end: end_token.pos_end,
         })
     }
 
@@ -114,8 +130,9 @@ impl<'a> Parser<'a> {
     fn parse_value(&mut self) -> Result<MonValue, MonError> {
         let anchor = self.parse_optional_anchor()?;
 
-        let token = self.current_token()?;
-        let mut value = match &token.ttype.clone() {
+        let start_token = self.current_token()?.clone(); // Capture start token for pos_start
+
+        let mut value = match &start_token.ttype.clone() { // Use start_token here
             TokenType::LBrace => self.parse_object(),
             TokenType::LBracket => self.parse_array(),
             TokenType::String(s) => {
@@ -123,6 +140,8 @@ impl<'a> Parser<'a> {
                 Ok(MonValue {
                     kind: MonValueKind::String(s.clone()),
                     anchor: None,
+                    pos_start: start_token.pos_start,
+                    pos_end: start_token.pos_end,
                 })
             }
             TokenType::Number(n) => {
@@ -130,6 +149,8 @@ impl<'a> Parser<'a> {
                 Ok(MonValue {
                     kind: MonValueKind::Number(*n),
                     anchor: None,
+                    pos_start: start_token.pos_start,
+                    pos_end: start_token.pos_end,
                 })
             }
             TokenType::True => {
@@ -137,6 +158,8 @@ impl<'a> Parser<'a> {
                 Ok(MonValue {
                     kind: MonValueKind::Boolean(true),
                     anchor: None,
+                    pos_start: start_token.pos_start,
+                    pos_end: start_token.pos_end,
                 })
             }
             TokenType::False => {
@@ -144,6 +167,8 @@ impl<'a> Parser<'a> {
                 Ok(MonValue {
                     kind: MonValueKind::Boolean(false),
                     anchor: None,
+                    pos_start: start_token.pos_start,
+                    pos_end: start_token.pos_end,
                 })
             }
             TokenType::Null => {
@@ -151,6 +176,8 @@ impl<'a> Parser<'a> {
                 Ok(MonValue {
                     kind: MonValueKind::Null,
                     anchor: None,
+                    pos_start: start_token.pos_start,
+                    pos_end: start_token.pos_end,
                 })
             }
             TokenType::Asterisk => self.parse_alias(),
@@ -219,14 +246,28 @@ impl<'a> Parser<'a> {
     /// Key ::= Identifier | String
     fn parse_key(&mut self) -> Result<String, MonError> {
         let token = self.current_token()?;
+        let mut key_parts = Vec::new();
+
         match &token.ttype {
             TokenType::Identifier(s) | TokenType::String(s) => {
-                let s = s.clone();
+                key_parts.push(s.clone());
                 self.advance();
-                Ok(s)
             }
-            _ => self.err_unexpected("an identifier or string for a key"),
+            _ => return self.err_unexpected("an identifier or string for a key"),
         }
+
+        // Handle dotted keys like `schemas.User`
+        while self.match_token(TokenType::Dot) {
+            let token = self.current_token()?;
+            if let TokenType::Identifier(s) = &token.ttype {
+                key_parts.push(s.clone());
+                self.advance();
+            } else {
+                return self.err_unexpected("an identifier after a dot in a key");
+            }
+        }
+
+        Ok(key_parts.join("."))
     }
 
     /// Anchor ::= "&" Identifier
@@ -247,15 +288,22 @@ impl<'a> Parser<'a> {
 
     /// Alias ::= "*" Identifier { "." Identifier }
     fn parse_alias(&mut self) -> Result<MonValue, MonError> {
+        let start_token = self.current_token()?.clone();
         self.expect(TokenType::Asterisk)?;
         let mut name = self.parse_key()?;
+        let mut end_pos = self.current_token_before_advance()?.pos_end; // End of the first key part
+
         while self.match_token(TokenType::Dot) {
             name.push('.');
-            name.push_str(&self.parse_key()?);
+            let key_part = self.parse_key()?;
+            end_pos = self.current_token_before_advance()?.pos_end; // Update end_pos
+            name.push_str(&key_part);
         }
         Ok(MonValue {
             kind: MonValueKind::Alias(name),
             anchor: None,
+            pos_start: start_token.pos_start,
+            pos_end: end_pos,
         })
     }
 
@@ -273,6 +321,7 @@ impl<'a> Parser<'a> {
 
     /// ImportStatement ::= "import" ( NamespaceImport | NamedImport ) "from" String
     fn parse_import_statement(&mut self) -> Result<ImportStatement, MonError> {
+        let start_token = self.current_token()?.clone(); // Capture start token for pos_start
         self.expect(TokenType::Import)?;
 
         let spec = if self.match_token(TokenType::Asterisk) {
@@ -303,8 +352,15 @@ impl<'a> Parser<'a> {
         };
 
         self.expect(TokenType::From)?;
+        let path_token = self.current_token()?.clone(); // Capture path token for pos_end
         let path = self.parse_key()?;
-        Ok(ImportStatement { path, spec })
+
+        Ok(ImportStatement {
+            path,
+            spec,
+            pos_start: start_token.pos_start,
+            pos_end: path_token.pos_end,
+        })
     }
 
     /// TypeDefinition ::= Identifier ":" ( StructDefinition | EnumDefinition )
@@ -428,16 +484,21 @@ impl<'a> Parser<'a> {
 
     /// EnumValue ::= "$" Identifier "." Identifier
     fn parse_enum_value(&mut self) -> Result<MonValue, MonError> {
+        let start_token = self.current_token()?.clone();
         self.expect(TokenType::Dollar)?;
         let enum_name = self.parse_key()?;
         self.expect(TokenType::Dot)?;
         let variant_name = self.parse_key()?;
+        let end_token = self.current_token_before_advance()?.clone(); // End of the variant_name
+
         Ok(MonValue {
             kind: MonValueKind::EnumValue {
                 enum_name,
                 variant_name,
             },
             anchor: None,
+            pos_start: start_token.pos_start,
+            pos_end: end_token.pos_end,
         })
     }
 
@@ -445,6 +506,17 @@ impl<'a> Parser<'a> {
 
     fn current_token(&self) -> Result<&Token, MonError> {
         self.tokens.get(self.position).ok_or_else(|| {
+            let pos = self.source_text.len().saturating_sub(1);
+            ParserError::UnexpectedEof {
+                src: (*self.source).clone(),
+                span: (pos, 0).into(),
+            }
+            .into()
+        })
+    }
+
+    fn current_token_before_advance(&self) -> Result<&Token, MonError> {
+        self.tokens.get(self.position.saturating_sub(1)).ok_or_else(|| {
             let pos = self.source_text.len().saturating_sub(1);
             ParserError::UnexpectedEof {
                 src: (*self.source).clone(),
@@ -714,7 +786,7 @@ mod tests {
     #[test]
     #[ignore]
     fn visual_conformation_from_golden() {
-        let contents = fs::read_to_string("tests/compiler/ok/golden.mon").unwrap();
+        let contents = fs::read_to_string("tests/ok/golden.mon").unwrap();
         let parsed = Parser::new(&contents).unwrap().parse_document();
 
         print!("parsed: \n{}", pretty_result(parsed))
