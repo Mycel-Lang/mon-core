@@ -1,0 +1,6 @@
+// This resolves.
+
+struct Resolver {
+
+
+}

@@ -1,11 +1,12 @@
 use crate::ast::*;
 use crate::error::{MonError, ParserError};
 use crate::lexer::{Lexer, Token, TokenType};
-use miette::NamedSource;
+use miette::{GraphicalReportHandler, NamedSource, Report};
 use std::panic::Location;
 use std::sync::Arc;
 
 /// A recursive descent parser for the MON language, built according to the EBNF grammar.
+#[derive(Debug)]
 pub struct Parser<'a> {
     source: Arc<NamedSource<String>>,
     tokens: Vec<Token>,
@@ -33,11 +34,23 @@ impl<'a> Parser<'a> {
 
     // === Main Parsing Methods ===
 
-    /// Document ::= Object
+    ///    Document ::= { ImportStatement } Object
     pub fn parse_document(&mut self) -> Result<MonDocument, MonError> {
+        let mut imports: Vec<ImportStatement> = Vec::new();
+
+        // consume zero-or-more import statements
+        while self.check(TokenType::Import) {
+            let imp = self.parse_import_statement()?;
+            imports.push(imp);
+            // DON'T call self.advance() here — parse_import_statement already advances
+        }
+
+        // After imports, we expect the root object.
         let root = self.parse_object()?;
+
+        // After the root object, we expect the end of the file.
         self.expect(TokenType::Eof)?;
-        Ok(MonDocument { root })
+        Ok(MonDocument { root, imports })
     }
 
     /// Object ::= "{" [ MemberList ] "}"
@@ -46,14 +59,15 @@ impl<'a> Parser<'a> {
         self.expect(TokenType::LBrace)?;
         let mut members = Vec::new();
         if !self.check(TokenType::RBrace) {
-            loop {
-                members.push(self.parse_member()?);
-                if !self.match_token(TokenType::Comma) {
+            // Parse the first member
+            members.push(self.parse_member()?);
+            // Keep parsing members as long as they are preceded by a comma
+            while self.match_token(TokenType::Comma) {
+                // If we match a comma but the next token is a brace, it's a trailing comma
+                if self.check(TokenType::RBrace) {
                     break;
                 }
-                if self.check(TokenType::RBrace) {
-                    break; // Allow trailing comma
-                }
+                members.push(self.parse_member()?);
             }
         }
         self.expect(TokenType::RBrace)?;
@@ -70,7 +84,16 @@ impl<'a> Parser<'a> {
         let mut values = Vec::new();
         if !self.check(TokenType::RBracket) {
             loop {
-                values.push(self.parse_value()?);
+                if self.check(TokenType::Spread) {
+                    let spread_name = self.parse_spread()?;
+                    values.push(MonValue {
+                        kind: MonValueKind::ArraySpread(spread_name),
+                        anchor: None,
+                    });
+                } else {
+                    values.push(self.parse_value()?);
+                }
+
                 if !self.match_token(TokenType::Comma) {
                     break;
                 }
@@ -139,10 +162,9 @@ impl<'a> Parser<'a> {
         Ok(value)
     }
 
-    /// Member ::= Pair | TypeDefinition | ImportStatement | Spread
+    /// Member ::= Pair | TypeDefinition | Spread
     fn parse_member(&mut self) -> Result<Member, MonError> {
         match self.current_token()?.ttype {
-            TokenType::Import => self.parse_import_statement().map(Member::Import),
             TokenType::Spread => self.parse_spread().map(Member::Spread),
             // A TypeDefinition starts with an Identifier followed by a Colon and a Hash
             TokenType::Identifier(_)
@@ -159,8 +181,17 @@ impl<'a> Parser<'a> {
     /// KeyPart ::= [ Anchor ] Key
     /// Key ::= Identifier | String
     fn parse_pair(&mut self) -> Result<Pair, MonError> {
-        let anchor = self.parse_optional_anchor()?;
-        let key = self.parse_key()?;
+        let mut anchor_from_key: Option<String> = None;
+
+        // Handle the case where the key itself is an anchor, e.g., `&my_anchor: value`
+        let key = if self.match_token(TokenType::Ampersand) {
+            let key_name = self.parse_key()?;
+            anchor_from_key = Some(key_name.clone());
+            key_name
+        } else {
+            self.parse_key()?
+        };
+
         let validation = self.parse_optional_validation()?;
 
         if !self.match_token(TokenType::Colon) && !self.match_token(TokenType::Equals) {
@@ -168,9 +199,12 @@ impl<'a> Parser<'a> {
         }
 
         let mut value = self.parse_value()?;
-        // The anchor belongs to the value, not the key part.
-        if anchor.is_some() {
-            value.anchor = anchor;
+
+        // If the key was an anchor, attach the anchor to the value.
+        // This handles `&anchor: value`.
+        // The `parse_value` function handles the `key: &anchor value` case on its own.
+        if let Some(anchor_name) = anchor_from_key {
+            value.anchor = Some(anchor_name);
         }
 
         Ok(Pair {
@@ -211,20 +245,18 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Alias ::= "*" Identifier
+    /// Alias ::= "*" Identifier { "." Identifier }
     fn parse_alias(&mut self) -> Result<MonValue, MonError> {
         self.expect(TokenType::Asterisk)?;
-        let token = self.current_token()?;
-        if let TokenType::Identifier(name) = &token.ttype {
-            let name = name.clone();
-            self.advance();
-            Ok(MonValue {
-                kind: MonValueKind::Alias(name),
-                anchor: None,
-            })
-        } else {
-            self.err_unexpected("an identifier for the alias name")
+        let mut name = self.parse_key()?;
+        while self.match_token(TokenType::Dot) {
+            name.push('.');
+            name.push_str(&self.parse_key()?);
         }
+        Ok(MonValue {
+            kind: MonValueKind::Alias(name),
+            anchor: None,
+        })
     }
 
     /// Spread ::= "..." Alias
@@ -242,6 +274,7 @@ impl<'a> Parser<'a> {
     /// ImportStatement ::= "import" ( NamespaceImport | NamedImport ) "from" String
     fn parse_import_statement(&mut self) -> Result<ImportStatement, MonError> {
         self.expect(TokenType::Import)?;
+
         let spec = if self.match_token(TokenType::Asterisk) {
             // NamespaceImport ::= "*" "as" Identifier
             self.expect(TokenType::As)?;
@@ -368,12 +401,25 @@ impl<'a> Parser<'a> {
         if self.check(TokenType::LBracket) {
             // CollectionType ::= "[" Type [ "..." ] { "," Type [ "..." ] } "]"
             self.expect(TokenType::LBracket)?;
-            // This is a simplified implementation for collection types.
-            // A full implementation would need to handle the recursive structure.
-            let type_name = self.parse_key()?;
-            let _is_spread = self.match_token(TokenType::Spread);
+            let mut types = Vec::new();
+            if !self.check(TokenType::RBracket) {
+                loop {
+                    let mut type_spec = self.parse_type_spec()?;
+                    if self.match_token(TokenType::Spread) {
+                        type_spec = TypeSpec::Spread(Box::new(type_spec));
+                    }
+                    types.push(type_spec);
+
+                    if !self.match_token(TokenType::Comma) {
+                        break;
+                    }
+                    if self.check(TokenType::RBracket) {
+                        break;
+                    }
+                }
+            }
             self.expect(TokenType::RBracket)?;
-            Ok(TypeSpec::Collection(vec![TypeSpec::Simple(type_name)]))
+            Ok(TypeSpec::Collection(types))
         } else {
             // Simple Type
             self.parse_key().map(TypeSpec::Simple)
@@ -414,8 +460,9 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[track_caller]
     fn expect(&mut self, expected: TokenType) -> Result<(), MonError> {
-        let token = self.current_token()?;
+        let token = self.current_token()?.clone();
         if std::mem::discriminant(&token.ttype) == std::mem::discriminant(&expected) {
             self.advance();
             Ok(())
@@ -451,7 +498,7 @@ impl<'a> Parser<'a> {
 
     fn peek_next_is(&self, ttype: TokenType) -> bool {
         if let Some(token) = self.tokens.get(self.position + 2) {
-            token.ttype == ttype
+            std::mem::discriminant(&token.ttype) == std::mem::discriminant(&ttype)
         } else {
             false
         }
@@ -459,7 +506,7 @@ impl<'a> Parser<'a> {
 
     #[track_caller]
     fn err_unexpected<T>(&self, expected: &str) -> Result<T, MonError> {
-        let token = self.current_token().unwrap(); // Should be safe if we got here
+        let token = self.current_token()?; // Should be safe if we got here
         print!("caller: {}", Location::caller());
         Err(ParserError::UnexpectedToken {
             src: (*self.source).clone(),
@@ -470,10 +517,26 @@ impl<'a> Parser<'a> {
     }
 }
 
+// internal debug function. I really can't stand bad strings
+#[allow(dead_code)]
+fn pretty_result(out: Result<MonDocument, MonError>) -> String {
+    match out {
+        Ok(doc) => format!("{:#?}", doc), // debug format for success
+        Err(err) => {
+            let report: Report = Report::new(err);
+            let handler = GraphicalReportHandler::new(); // pretty ANSI colors
+            let mut buffer = String::new();
+            handler.render_report(&mut buffer, &*report).unwrap();
+            buffer
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use miette::Report;
+    use std::fs;
 
     fn parse_ok(source: &str) -> MonDocument {
         let mut parser = Parser::new(source).unwrap();
@@ -551,45 +614,42 @@ mod tests {
 
     #[test]
     fn test_namespace_import() {
-        let doc = parse_ok(r#"{ import * as my_schemas from "./schemas.mon" }"#);
+        let doc = parse_ok(r#"import * as my_schemas from "./schemas.mon" {}"#);
+        assert_eq!(doc.imports.len(), 1);
+        let i = &doc.imports[0];
+        assert_eq!(i.path, "./schemas.mon");
+        assert!(matches!(i.spec, ImportSpec::Namespace(ref s) if s == "my_schemas"));
+
+        // Root object should be empty
         let members = match doc.root.kind {
             MonValueKind::Object(m) => m,
-            _ => panic!(),
+            _ => panic!("Root was not an object"),
         };
-        assert_eq!(members.len(), 1);
-        match &members[0] {
-            Member::Import(i) => {
-                assert_eq!(i.path, "./schemas.mon");
-                assert!(matches!(i.spec, ImportSpec::Namespace(_)));
-            }
-            _ => panic!(),
-        }
+        assert!(members.is_empty());
     }
 
     #[test]
     fn test_named_import() {
-        let doc = parse_ok(r#"{ import { User, &Template } from "./file.mon" }"#);
-        let members = match doc.root.kind {
-            MonValueKind::Object(m) => m,
-            _ => panic!(),
-        };
-        assert_eq!(members.len(), 1);
-        match &members[0] {
-            Member::Import(i) => {
-                assert_eq!(i.path, "./file.mon");
-                match &i.spec {
-                    ImportSpec::Named(specs) => {
-                        assert_eq!(specs.len(), 2);
-                        assert_eq!(specs[0].name, "User");
-                        assert_eq!(specs[0].is_anchor, false);
-                        assert_eq!(specs[1].name, "Template");
-                        assert_eq!(specs[1].is_anchor, true);
-                    }
-                    _ => panic!(),
-                }
+        let doc = parse_ok(r#"import { User, &Template } from "./file.mon" {}"#);
+        assert_eq!(doc.imports.len(), 1);
+        let i = &doc.imports[0];
+        assert_eq!(i.path, "./file.mon");
+        match &i.spec {
+            ImportSpec::Named(specs) => {
+                assert_eq!(specs.len(), 2);
+                assert_eq!(specs[0].name, "User");
+                assert!(!specs[0].is_anchor);
+                assert_eq!(specs[1].name, "Template");
+                assert!(specs[1].is_anchor);
             }
             _ => panic!(),
         }
+        // Root object should be empty
+        let members = match doc.root.kind {
+            MonValueKind::Object(m) => m,
+            _ => panic!("Root was not an object"),
+        };
+        assert!(members.is_empty());
     }
 
     #[test]
@@ -649,5 +709,14 @@ mod tests {
             }
             _ => panic!(),
         }
+    }
+
+    #[test]
+    #[ignore]
+    fn visual_conformation_from_golden() {
+        let contents = fs::read_to_string("tests/compiler/ok/golden.mon").unwrap();
+        let parsed = Parser::new(&contents).unwrap().parse_document();
+
+        print!("parsed: \n{}", pretty_result(parsed))
     }
 }

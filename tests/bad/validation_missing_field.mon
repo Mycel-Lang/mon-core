@@ -1,0 +1,10 @@
+{
+    Config: #struct {
+        host(String),
+        port(Number),
+    },
+
+    my_config :: Config = {
+        port: 8080, // Invalid: missing required 'host' field
+    },
+}

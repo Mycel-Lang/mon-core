@@ -1,0 +1,22 @@
+{
+    &base_user: {
+        is_active: true,
+        theme: "dark"
+    },
+
+    &base_permissions: ["READ", "WRITE"],
+
+    user1: *base_user,
+
+    user2: {
+        ...*base_user,
+        name: "Alice",
+        theme: "light" // override
+    },
+
+    admin_permissions: [
+        "LOGIN",
+        ...*base_permissions,
+        "DELETE"
+    ]
+}

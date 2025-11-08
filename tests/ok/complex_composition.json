@@ -1,0 +1,23 @@
+{
+    "admin_config": {
+        "host": "prod.db.internal",
+        "port": 9001,
+        "credentials": {
+            "user": "admin",
+            "pass": "secret_override"
+        },
+        "features": [
+            "AUDIT_LOG",
+            "USER_MGMT",
+            "BACKUPS"
+        ]
+    },
+    "final_user": {
+        "name": "Final User",
+        "email": "final@example.com",
+        "prefs": {
+            "theme": "dark_mode",
+            "notifications": true
+        }
+    }
+}

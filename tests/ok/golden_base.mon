@@ -1,0 +1,17 @@
+// This is a base file for golden.mon to test imports.
+{
+    // An anchor to be imported and spread.
+    &base_settings: {
+        log_level: "INFO",
+        retries: 3,
+    },
+
+    // A type to be imported.
+    Timestamp: #struct {
+        unix(Number),
+        utc(String),
+    },
+
+    // An anchor to be imported as an alias
+    &default_tags: ["default", "base"],
+}

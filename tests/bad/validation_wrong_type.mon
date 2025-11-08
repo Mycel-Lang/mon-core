@@ -1,0 +1,11 @@
+{
+    Config: #struct {
+        host(String),
+        port(Number),
+    },
+
+    my_config :: Config = {
+        host: "localhost",
+        port: "8080", // Invalid: port should be a Number
+    },
+}

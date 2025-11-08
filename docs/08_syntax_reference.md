@@ -4,11 +4,15 @@ This document provides a complete, quick-reference guide to all syntax and featu
 
 ### 1. File Structure
 
-A valid MON file must consist of a single root object.
+A valid MON file can optionally start with one or more `import` statements, followed by a single root object.
 
 ```mon
+// Optional imports first
+import * as my_module from "./my_module.mon"
+
+// Then, the single root object
 {
-    // All content, including declarations and values, goes inside this single object.
+    // All content, including declarations and values, goes inside this object.
 }
 ```
 
@@ -89,9 +93,11 @@ Used within `#struct` field definitions (e.g., `my_field([String...])`).
 
 ### 9. Module System
 
+Import statements must be declared at the top of a file, before the root object.
+
 *   **Implicit Exports**: All top-level keys in a file are importable.
-*   **Namespace Import**: `import * as ns from "./file.mon",`
-*   **Named Import**: `import { Member1, &Anchor2 } from "./file.mon",`
+*   **Namespace Import**: `import * as ns from "./file.mon"`
+*   **Named Import**: `import { Member1, &Anchor2 } from "./file.mon"`
 
 ---
 

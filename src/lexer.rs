@@ -91,7 +91,6 @@ impl Token {
 }
 
 pub struct Lexer<'a> {
-    input: &'a str,
     chars: std::iter::Peekable<std::str::Chars<'a>>,
     position: usize,
 }
@@ -99,7 +98,6 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
-            input,
             chars: input.chars().peekable(),
             position: 0,
         }
@@ -168,7 +166,7 @@ impl<'a> Lexer<'a> {
                 c if c.is_whitespace() => self.read_whitespace(),
                 c if c.is_ascii_alphabetic() || c == '_' => self.read_identifier(c),
                 c if c.is_ascii_digit()
-                    || (c == '-' && self.peek().map_or(false, |c| c.is_ascii_digit())) =>
+                    || (c == '-' && self.peek().is_some_and(|c| c.is_ascii_digit())) =>
                 {
                     self.read_number(c)
                 }
@@ -219,34 +217,34 @@ impl<'a> Lexer<'a> {
 
     fn read_string(&mut self) -> TokenType {
         let mut value = String::new();
-        while let Some(c) = self.peek() {
-            if *c == '"' {
-                self.advance(); // Consume the closing quote
-                return TokenType::String(value);
-            }
-
-            if *c == '\\' {
-                self.advance(); // Consume the backslash
-                if let Some(escaped_char) = self.advance() {
-                    match escaped_char {
-                        '"' => value.push('"'),
-                        '\\' => value.push('\\'),
-                        'n' => value.push('\n'),
-                        'r' => value.push('\r'),
-                        't' => value.push('\t'),
-                        _ => {
-                            value.push('\\');
-                            value.push(escaped_char);
-                        }
-                    }
-                } else {
-                    return TokenType::Unknown; // Unclosed escape sequence
+        loop {
+            match self.peek() {
+                Some('\"') => {
+                    self.advance(); // Consume the closing quote
+                    return TokenType::String(value);
                 }
-            } else {
-                value.push(self.advance().unwrap());
+                Some('\\') => {
+                    self.advance(); // Consume the backslash
+                    match self.advance() {
+                        Some('\"') => value.push('\"'),
+                        Some('\\') => value.push('\\'),
+                        Some('n') => value.push('\n'),
+                        Some('r') => value.push('\r'),
+                        Some('t') => value.push('\t'),
+                        Some(other) => {
+                            value.push('\\');
+                            value.push(other);
+                        }
+                        None => return TokenType::Unknown, // Unclosed escape sequence
+                    }
+                }
+                Some(c) => {
+                    value.push(*c);
+                    self.advance();
+                }
+                None => return TokenType::Unknown, // Unclosed string
             }
         }
-        TokenType::Unknown // Unclosed string
     }
 
     fn read_identifier(&mut self, first_char: char) -> TokenType {
@@ -304,6 +302,21 @@ impl<'a> Lexer<'a> {
             TokenType::Unknown
         }
     }
+}
+
+/// QOL function
+#[allow(dead_code)]
+pub(crate) fn tokens_to_pretty_string(tokens: &[Token]) -> String {
+    let mut buff: Vec<String> = Vec::with_capacity(tokens.len());
+
+    for token in tokens {
+        buff.push(format!(
+            "{:?}, {}, {}",
+            token.ttype, token.pos_start, token.pos_end
+        ));
+    }
+
+    buff.join("\n")
 }
 
 #[cfg(test)]
@@ -402,7 +415,7 @@ mod tests {
 
     #[test]
     fn test_strings() {
-        let input = r#"hello world" "" "another"#;
+        let input = r#""hello world" "" "another""#;
         let expected = vec![
             TokenType::String("hello world".to_string()),
             TokenType::String("".to_string()),
@@ -414,13 +427,9 @@ mod tests {
 
     #[test]
     fn test_strings_with_escapes() {
-        let input = r#"hello \"world\"	\n\r"#;
+        let input = r#""hello \"world\"\t\n\r""#;
         let expected = vec![
-            TokenType::String(
-                r#"hello "world"	
-"#
-                .to_string(),
-            ),
+            TokenType::String("hello \"world\"\t\n\r".to_string()),
             TokenType::Eof,
         ];
         assert_tokens(input, expected);

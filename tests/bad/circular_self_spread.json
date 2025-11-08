@@ -1,0 +1,4 @@
+{
+  "error": "ResolutionError",
+  "message": "Circular dependency detected: anchor 'my_object' refers to itself during resolution."
+}

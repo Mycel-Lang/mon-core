@@ -1,14 +1,9 @@
-use crate::error::MonError;
-use crate::lexer::Lexer;
-use crate::parser::Parser;
-use miette::Report;
-use std::fmt::{Debug, Display, write};
-use std::fs;
-use std::sync::Arc;
+use std::fmt::{Debug, Display};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct MonDocument {
     pub root: MonValue,
+    pub imports: Vec<ImportStatement>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -26,8 +21,11 @@ pub enum MonValueKind {
     Object(Vec<Member>),
     Array(Vec<MonValue>),
     Alias(String),
-    // New enum variant for enum value access, e.g., $MyEnum.Variant
-    EnumValue { enum_name: String, variant_name: String },
+    EnumValue {
+        enum_name: String,
+        variant_name: String,
+    },
+    ArraySpread(String),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -97,6 +95,7 @@ pub struct EnumDef {
 pub enum TypeSpec {
     Simple(String),
     Collection(Vec<TypeSpec>),
+    Spread(Box<TypeSpec>),
 }
 
 impl Display for Member {
@@ -158,9 +157,13 @@ impl Display for MonValue {
                 write!(f, "]")
             }
             MonValueKind::Alias(a) => write!(f, "*{}", a),
-            MonValueKind::EnumValue { enum_name, variant_name } => {
+            MonValueKind::EnumValue {
+                enum_name,
+                variant_name,
+            } => {
                 write!(f, "${}.{}", enum_name, variant_name)
             }
+            MonValueKind::ArraySpread(s) => write!(f, "...*{}", s),
         }
     }
 }

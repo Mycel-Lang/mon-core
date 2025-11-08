@@ -1,0 +1,3 @@
+{
+    value: *undefined_anchor, // Invalid: this anchor is not defined anywhere
+}

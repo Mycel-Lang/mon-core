@@ -1,0 +1,5 @@
+{
+  "error": "ParserError",
+  "kind": "UnexpectedToken",
+  "message": "Expected a comma or a closing brace '}' after a member, but found an identifier."
+}

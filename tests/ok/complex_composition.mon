@@ -1,0 +1,44 @@
+{
+    // Stage 1: Base templates
+    &base_creds: { user: "default", pass: "default_pass" },
+    &base_features: ["AUDIT_LOG"],
+
+    // Stage 2: Environment-specific templates that build on Stage 1
+    &dev_config_base: {
+        host: "dev.db.local",
+        port: 5432,
+        credentials: *base_creds,
+    },
+    &prod_config_base: {
+        ...*dev_config_base, // Start with dev config
+        host: "prod.db.internal", // Override host
+        credentials: { ...*base_creds, pass: "secret_override" }, // Override nested value
+    },
+
+    // Stage 3: Final configs using Stage 2 templates
+    admin_config: {
+        ...*prod_config_base,
+        port: 9001, // Override port again
+        features: [
+            ...*base_features,
+            "USER_MGMT",
+            "BACKUPS",
+        ],
+    },
+
+    // Another complex composition chain for a different entity
+    &user_prefs: { theme: "light", notifications: false },
+    &user_profile: { name: "Default", email: "default@example.com" },
+
+    &merged_user: {
+        ...*user_profile,
+        prefs: *user_prefs,
+    },
+
+    final_user: {
+        ...*merged_user,
+        name: "Final User",
+        prefs: { ...*user_prefs, theme: "dark_mode", notifications: true },
+        email: "final@example.com",
+    },
+}

@@ -1,0 +1,61 @@
+// Import from the intermediate file (named) and the base file (namespace)
+import { &level2_config, &level2_list, IntermediateType } from "./pandemonium_intermediate.mon"
+import * as base from "./pandemonium_base.mon"
+
+{
+    // An alias to an imported anchor from the intermediate file
+    &alias_to_imported: *level2_config,
+
+    // A new anchor that spreads the alias and adds more overrides
+    &level3_config: {
+        ...*alias_to_imported,
+        d: 4,
+        a: "overridden again",
+    },
+
+    // A struct with a default value that is a complex object containing an alias
+    FinalStruct: #struct {
+        name(String),
+        data(Object) = {
+            source: "default",
+            config: *level2_config, // Default uses the imported L2 config
+        },
+    },
+
+    // An instance of the struct, overriding the complex default value
+    instance1 :: FinalStruct = {
+        name: "Instance 1",
+        data: {
+            source: "instance",
+            config: *level3_config, // Override with the L3 config
+            extra: "field",
+        },
+    },
+
+    // An instance that uses the default value, requiring deep resolution
+    instance2 :: FinalStruct = {
+        name: "Instance 2",
+    },
+
+    // An array that combines spreads from both the intermediate and base files
+    final_list: [
+        ...*level2_list,
+        5,
+        { nested_spread: *level3_config },
+        ...*base.level1_list, // Use the namespace import
+    ],
+
+    // A recursive struct for good measure
+    Node: #struct {
+        id(String),
+        children([Node...]) = [],
+    },
+
+    tree :: Node = {
+        id: "root",
+        children: [
+            { id: "child1" }, // children will default to []
+            { id: "child2", children: [{ id: "grandchild" }] },
+        ],
+    },
+}

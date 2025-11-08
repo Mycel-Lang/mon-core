@@ -1,0 +1,9 @@
+[package]
+name = "mon-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+miette = { version = "7.6.0", features = ["fancy"] }
+thiserror = "2.0.17"
+log = "0.4.28"

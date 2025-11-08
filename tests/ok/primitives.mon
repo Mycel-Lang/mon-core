@@ -1,0 +1,11 @@
+{
+    string: "hello world",
+    number_int: 42,
+    number_float: -3.14,
+    boolean_on: on,
+    boolean_true: true,
+    boolean_off: off,
+    boolean_false: false,
+    is_null: null,
+    "key with spaces": "value"
+}

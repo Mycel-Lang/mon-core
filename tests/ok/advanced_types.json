@@ -1,0 +1,20 @@
+{
+    "log_config": {
+        "outputs": [
+            {
+                "type": "File",
+                "path": "/var/log/app.log",
+                "rotation": "daily"
+            },
+            {
+                "type": "Syslog",
+                "address": "127.0.0.1:514"
+            }
+        ],
+        "levels": ["INFO", "WARN", "ERROR"]
+    },
+    "default_user": {
+        "name": "Guest",
+        "roles": []
+    }
+}

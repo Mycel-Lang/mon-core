@@ -1,0 +1,12 @@
+{
+    Config: #struct {
+        host(String),
+        port(Number),
+    },
+
+    my_config :: Config = {
+        host: "localhost",
+        port: 8080,
+        debug_mode: true, // Invalid: extra field not in struct definition
+    },
+}

@@ -1,0 +1,12 @@
+{
+    "valid_user": {
+        "id": 1,
+        "name": "Alice",
+        "email": null
+    },
+    "user_with_defaults": {
+        "id": 2,
+        "name": "Bob",
+        "email": "bob@example.com"
+    }
+}

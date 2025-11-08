@@ -1,0 +1,13 @@
+import * as schemas from "./imports_schemas.mon"
+import { &base_config } from "./imports_base.mon"
+
+{
+    user :: schemas.User = {
+        name: "Charlie"
+    },
+
+    config: {
+        ...*base_config,
+        port: 9000
+    }
+}

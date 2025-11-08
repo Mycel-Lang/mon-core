@@ -1,6 +1,4 @@
-use std::fmt::Display;
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic, Clone)]

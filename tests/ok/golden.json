@@ -1,0 +1,69 @@
+{
+  "is_golden_test": true,
+  "main_task": {
+    "id": "task-001",
+    "status": "Running",
+    "created_at": {
+      "unix": 1730995200,
+      "utc": "2025-11-07T00:00:00Z"
+    },
+    "tags": [
+      "golden",
+      "test",
+      "critical"
+    ],
+    "result": null
+  },
+  "secondary_config": {
+    "log_level": "INFO",
+    "retries": 5,
+    "timeout": 120,
+    "user-agent": "MON-Golden-Test/1.0"
+  },
+  "all_tasks": [
+    {
+      "id": "task-001",
+      "status": "Running",
+      "created_at": {
+        "unix": 1730995200,
+        "utc": "2025-11-07T00:00:00Z"
+      },
+      "tags": [
+        "golden",
+        "test",
+        "critical"
+      ],
+      "result": null
+    },
+    {
+      "id": "task-002",
+      "status": "Completed",
+      "created_at": {
+        "unix": 1730995201,
+        "utc": "2025-11-07T00:00:01Z"
+      },
+      "tags": [
+        "golden",
+        "test"
+      ],
+      "result": [
+        0,
+        "Success"
+      ]
+    }
+  ],
+  "imported_tags_alias": [
+    "default",
+    "base"
+  ],
+  "key with spaces": null,
+  "empty_object": {},
+  "empty_array": [],
+  "number_float": -99.9,
+  "trailing_comma_object": {
+    "a": 1
+  },
+  "trailing_comma_array": [
+    1
+  ]
+}

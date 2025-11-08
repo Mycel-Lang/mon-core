@@ -1,0 +1,33 @@
+{
+    LogLevel: #enum { DEBUG, INFO, WARN, ERROR },
+
+    Output: #struct {
+        type(String),
+        path(String) = null,
+        address(String) = null,
+        rotation(String) = "none",
+    },
+
+    Logger: #struct {
+        // An array where every element must be a valid Output struct
+        outputs([Output...]),
+        // An array where every element must be a LogLevel enum value
+        levels([LogLevel...]),
+    },
+
+    log_config :: Logger = {
+        outputs: [
+            { type: "File", path: "/var/log/app.log", rotation: "daily" },
+            { type: "Syslog", address: "127.0.0.1:514" },
+        ],
+        levels: [$LogLevel.INFO, $LogLevel.WARN, $LogLevel.ERROR],
+    },
+
+    // Test default values that are complex types
+    User: #struct {
+        name(String) = "Guest",
+        roles([String...]) = [], // Default is an empty array
+    },
+
+    default_user :: User = {},
+}

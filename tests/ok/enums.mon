@@ -1,0 +1,5 @@
+{
+    Status: #enum { Active, Inactive, Pending },
+    current_status: $Status.Active,
+    previous_status: $Status.Inactive
+}

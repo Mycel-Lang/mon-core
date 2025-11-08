@@ -1,0 +1,4 @@
+import * as b from "./circular_import_b.mon"
+
+{
+}

@@ -1,0 +1,17 @@
+{
+    "user1": {
+        "is_active": true,
+        "theme": "dark"
+    },
+    "user2": {
+        "is_active": true,
+        "theme": "light",
+        "name": "Alice"
+    },
+    "admin_permissions": [
+        "LOGIN",
+        "READ",
+        "WRITE",
+        "DELETE"
+    ]
+}

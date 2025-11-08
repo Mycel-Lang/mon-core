@@ -1,0 +1,18 @@
+{
+    User: #struct {
+        id(Number),
+        name(String),
+        email(String) = null
+    },
+
+    valid_user :: User = {
+        id: 1,
+        name: "Alice"
+    },
+
+    user_with_defaults :: User = {
+        id: 2,
+        name: "Bob",
+        email: "bob@example.com"
+    }
+}

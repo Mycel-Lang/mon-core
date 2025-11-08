@@ -1,0 +1,5 @@
+{
+  "error": "ParserError",
+  "kind": "UnexpectedEof",
+  "message": "The file ended unexpectedly while parsing an object. It's missing a closing brace '}'."
+}

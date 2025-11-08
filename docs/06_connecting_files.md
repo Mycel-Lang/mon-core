@@ -2,6 +2,8 @@
 
 Real-world projects are often split into multiple files for better organization. MON's module system allows you to connect these files, sharing types and data in a clear and explicit way.
 
+All `import` statements must appear at the top of the file, before the opening `{` of the root object.
+
 ### Implicit Exports: Everything is Public
 
 In MON, the module system is simple: **every key-value pair in a file's root object is automatically available to be imported by other files.** You don't need a special `export` keyword.
@@ -31,10 +33,10 @@ Now, in your `main.mon` file, you can import it:
 
 `main.mon`
 ```mon
-{
-    // Import everything from schemas.mon into an object named `schemas`
-    import * as schemas from "./schemas.mon"
+// Import everything from schemas.mon into an object named `schemas`
+import * as schemas from "./schemas.mon"
 
+{
     // Now you can access the imported types via the namespace
     admin_user :: schemas.User = {
         name: "Admin",
@@ -52,10 +54,10 @@ You can also import specific members from another file directly into your curren
 
 `main.mon`
 ```mon
-{
-    // Import only the User struct and Status enum directly
-    import { User, Status } from "./schemas.mon"
+// Import only the User struct and Status enum directly
+import { User, Status } from "./schemas.mon"
 
+{
     // Now you can use them without the `schemas.` prefix
     guest_user :: User = {
         name: "Guest",
@@ -87,9 +89,9 @@ You can also import specific members from another file directly into your curren
 
 `app.mon`
 ```mon
-{
-    import * as db from "./db_config.mon"
+import * as db from "./db_config.mon"
 
+{
     production_db :: db.Database = {
         host: "api.production.com",
     },

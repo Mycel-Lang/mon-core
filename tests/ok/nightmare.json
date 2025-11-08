@@ -1,0 +1,64 @@
+{
+  "database_service": {
+    "component": {
+      "id": "db-01",
+      "name": "Primary Database",
+      "tags": [
+        "postgres",
+        "critical",
+        "v1.2.3"
+      ]
+    },
+    "status": "Enabled",
+    "endpoint": {
+      "protocol": "TCP",
+      "port": 5432
+    },
+    "sub_services": [
+      {
+        "component": {
+          "id": "db-replica-01",
+          "name": "Database Replica",
+          "tags": [
+            "postgres",
+            "replica"
+          ]
+        },
+        "status": "Enabled",
+        "endpoint": {
+          "protocol": "TCP",
+          "port": 5433
+        },
+        "sub_services": [
+          {
+            "component": {
+              "id": "backup-agent",
+              "name": "Backup Agent",
+              "tags": []
+            },
+            "status": "Maintenance",
+            "endpoint": {
+              "protocol": "UDP",
+              "port": 9000
+            },
+            "sub_services": []
+          }
+        ]
+      }
+    ]
+  },
+  "api-gateway": {
+    "credentials": {
+      "user": "admin",
+      "pass": "a_much_better_password",
+      "method": "scram-sha-256"
+    },
+    "permissions": [
+      "READ_ONLY",
+      "WRITE",
+      "DELETE",
+      "CONFIG_RELOAD"
+    ],
+    "port": 443
+  }
+}

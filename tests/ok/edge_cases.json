@@ -1,0 +1,13 @@
+{
+    "key1": "value1",
+    "key2": [1, 2, 3],
+    "key3": {
+        "a": 1,
+        "b": 2
+    },
+    "key-with-hyphens": true,
+    "key with spaces and \"quotes\"": "and escapes \\",
+    "empty_string": "",
+    "empty_object": {},
+    "empty_array": []
+}

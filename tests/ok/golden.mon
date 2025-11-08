@@ -1,0 +1,89 @@
+// This is the "golden" test case, exercising as many MON features as possible.
+// --- 1. IMPORTS ---
+// Namespace import
+import * as base from "./golden_base.mon"
+// Named import for a specific anchor and type
+import { &base_settings, Timestamp } from "./golden_base.mon"
+
+{
+
+    // --- 2. TYPE DEFINITIONS ---
+    Status: #enum {
+        Pending,
+        Running,
+        Completed,
+        Failed,
+    },
+
+    // A struct that uses imported types, enums, and collection validation.
+    Task: #struct {
+        id(String),
+        status(Status),
+        // Use the imported Timestamp struct
+        created_at(Timestamp),
+        // An array with one or more string tags
+        tags([String...]),
+        // A tuple-like array: [exit_code, message]
+        result([Number, String]) = null,
+    },
+
+    // --- 3. ANCHORS & COMPOSITION ---
+    // An anchor for a complex object
+    &default_task_config: {
+        ...*base_settings, // Spread from an imported anchor
+        timeout: 60,
+        "user-agent": "MON-Golden-Test/1.0",
+    },
+
+    // An anchor for an array
+    &common_tags: ["golden", "test"],
+
+    // --- 4. DATA & VALIDATION ---
+    // A simple key-value pair with a boolean
+    is_golden_test: on,
+
+    // A validated object instance.
+    main_task :: Task = {
+        id: "task-001",
+        status: $Status.Running,
+        created_at: {
+            unix: 1730995200, // Example: 2025-11-07 00:00:00 UTC
+            utc: "2025-11-07T00:00:00Z",
+        },
+        tags: [
+            ...*common_tags, // Spread a local anchor
+            "critical",
+        ],
+    },
+
+    // Another object, using an alias and overriding values.
+    secondary_config: {
+        ...*default_task_config, // Use the local anchor
+        timeout: 120, // Override a value
+        retries: 5,   // Override a value from the imported spread
+    },
+
+    // An array of objects, where some are validated.
+    all_tasks: [
+        *main_task, // An alias to the validated object above
+        {
+            // A second task, not explicitly validated but should be valid
+            id: "task-002",
+            status: $Status.Completed,
+            created_at: { unix: 1730995201, utc: "2025-11-07T00:00:01Z" },
+            tags: *common_tags, // Alias an array
+            result: [0, "Success"],
+        },
+    ],
+
+    // Using the other imported anchor
+    imported_tags_alias: *base.default_tags,
+
+    // --- 5. EDGE CASES ---
+    "key with spaces": null,
+    empty_object: {},
+    empty_array: [],
+    number_float: -99.9,
+    trailing_comma_object: { a: 1, },
+    trailing_comma_array: [ 1, ],
+}

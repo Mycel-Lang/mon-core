@@ -1,0 +1,4 @@
+{
+  "error": "ResolutionError",
+  "message": "Variant 'Unknown' is not defined in enum 'Status'."
+}

@@ -115,7 +115,7 @@ A spread (`...*`) unpacks an anchor's content into a new object or array, allowi
 
 ## Recipe 3: Modular Data with Imports
 
-You can split your MON configurations across multiple files.
+You can split your MON configurations across multiple files. All `import` statements must appear at the top of the file, before the opening `{` of the root object.
 
 **Ingredients:**
 *   `import * as ... from "path"`: The safest way to import.
@@ -136,10 +136,10 @@ This bundles everything from another file into a single name, preventing conflic
 
 **`main.mon`**
 ```mon
-{
-    // Import everything from schemas.mon into the `schemas` name
-    import * as schemas from "./schemas.mon"
+// Import everything from schemas.mon into the `schemas` name
+import * as schemas from "./schemas.mon"
 
+{
     // Access imported members using the namespace
     admin :: schemas.User = { name: "Admin" },
     current_status: $schemas.Status.Active,
@@ -152,10 +152,10 @@ Import specific parts directly into your file's scope.
 
 **`main.mon`**
 ```mon
-{
-    // Import only User and Status
-    import { User, Status } from "./schemas.mon"
+// Import only User and Status
+import { User, Status } from "./schemas.mon"
 
+{
     // Use them without a prefix
     guest :: User = { name: "Guest" },
     current_status: $Status.Inactive,
@@ -179,10 +179,10 @@ You can import an anchor from another file. This makes the anchored *value* a ne
 
 **`main.mon`**
 ```mon
-{
-    // Import the &base_user anchor from templates.mon
-    import { &base_user } from "./templates.mon"
+// Import the &base_user anchor from templates.mon
+import { &base_user } from "./templates.mon"
 
+{
     // Now you can use `base_user` as a local anchor!
     admin_user: {
         ...*base_user, // Spread the template

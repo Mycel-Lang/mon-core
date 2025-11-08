@@ -1,0 +1,5 @@
+{
+    Status: #enum { Active, Inactive },
+
+    current_status: $Status.Unknown, // Invalid: 'Unknown' is not a valid variant
+}

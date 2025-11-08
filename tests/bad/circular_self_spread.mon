@@ -1,0 +1,10 @@
+{
+    // This anchor tries to spread itself, creating a circular dependency.
+    &my_object: {
+        a: 1,
+        ...*my_object
+    },
+
+    // The error should be detected when trying to resolve this alias.
+    final: *my_object
+}

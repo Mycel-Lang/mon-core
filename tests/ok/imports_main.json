@@ -1,0 +1,9 @@
+{
+    "user": {
+        "name": "Charlie"
+    },
+    "config": {
+        "host": "localhost",
+        "port": 9000
+    }
+}

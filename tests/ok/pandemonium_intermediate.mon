@@ -1,0 +1,19 @@
+// Import from the base
+import { &level1_config, &level1_list, BaseType } from "./pandemonium_base.mon"
+
+{
+    // Level 2 anchors that build on the imported ones
+    &level2_config: {
+        ...*level1_config, // Spread
+        c: 3,
+        b: "overridden", // Override
+    },
+
+    &level2_list: [ ...*level1_list, 3, 4],
+
+    // A more complex type that uses an imported type
+    IntermediateType: #struct {
+        base(BaseType),
+        is_intermediate(Boolean) = true,
+    },
+}

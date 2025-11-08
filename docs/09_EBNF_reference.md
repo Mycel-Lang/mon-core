@@ -17,7 +17,7 @@ a formal supplement to the syntax reference.
 ### 1. Top-Level Structure
 
 ```ebnf
-Document ::= Object
+Document ::= { ImportStatement } Object
 ```
 
 ### 2. Values
@@ -47,7 +47,7 @@ ValueList ::= Value { "," Value } [ "," ]
 ### 4. Object Members
 
 ```ebnf
-Member ::= Pair | TypeDefinition | ImportStatement | Spread
+Member ::= Pair | TypeDefinition | Spread
 
 (* A key-value pair, which may include validation. *)
 Pair ::= KeyPart [ Validation ] ( ":" | "=" ) Value

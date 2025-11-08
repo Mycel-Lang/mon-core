@@ -17,4 +17,3 @@ pub fn get_line_and_column(source: &str, position: usize) -> (usize, usize) {
     }
     (line, column)
 }
-

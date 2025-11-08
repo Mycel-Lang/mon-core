@@ -1,0 +1,4 @@
+{
+  "error": "ResolutionError",
+  "message": "Attempted to use an alias for an anchor 'non_existent_anchor' that has not been defined."
+}

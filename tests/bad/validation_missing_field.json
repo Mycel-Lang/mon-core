@@ -1,0 +1,4 @@
+{
+  "error": "ValidationError",
+  "message": "Missing required field 'host' for struct 'Config'."
+}

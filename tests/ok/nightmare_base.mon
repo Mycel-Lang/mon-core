@@ -1,0 +1,18 @@
+{
+    // A base template for credentials, to be reused and overridden
+    &base_credentials: {
+        user: "guest",
+        pass: "password",
+        method: "scram-sha-256",
+    },
+
+    // A base set of permissions
+    &base_permissions: ["READ_ONLY"],
+
+    // A base struct for all addressable components
+    Component: #struct {
+        id(String),
+        name(String),
+        tags([String...]) = [],
+    },
+}

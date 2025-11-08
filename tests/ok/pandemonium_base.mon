@@ -1,0 +1,9 @@
+{
+    // Level 1 base anchors and types
+    &level1_config: { a: 1, b: 2 },
+    &level1_list: [1, 2],
+
+    BaseType: #struct {
+        timestamp(String),
+    },
+}

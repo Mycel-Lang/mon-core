@@ -1,0 +1,4 @@
+{
+    User: #struct { id(Number) },
+    my_user :: User = { id: "not a number" }
+}

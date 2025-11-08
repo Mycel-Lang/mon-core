@@ -1,0 +1,4 @@
+{
+  "error": "ValidationError",
+  "message": "Found unexpected field 'debug_mode' not defined in struct 'Config'."
+}

@@ -1,0 +1,78 @@
+// Import base types and anchors
+import { &base_credentials, &base_permissions, Component } from "./nightmare_base.mon"
+
+{
+    // Define local enums and more complex structs
+    Status: #enum { Enabled, Disabled, Maintenance },
+    Protocol: #enum { TCP, UDP },
+
+    Endpoint: #struct {
+        protocol(Protocol) = $Protocol.TCP,
+        port(Number),
+    },
+
+    Service: #struct {
+        component(Component),
+        status(Status) = $Status.Disabled,
+        endpoint(Endpoint),
+        sub_services([Service...]) = [],
+    },
+
+    // --- Data Section ---
+
+    &admin_credentials: {
+        ...*base_credentials,
+        user: "admin",
+        pass: "a_much_better_password",
+    },
+
+    &admin_permissions: [
+        ...*base_permissions,
+        "WRITE",
+        "DELETE",
+        "CONFIG_RELOAD",
+    ],
+
+    // An anchor that is an alias to another anchor
+    &creds_alias: *admin_credentials,
+
+    // The main database service instance, validated against the Service struct
+    database_service :: Service = {
+        component: {
+            id: "db-01",
+            name: "Primary Database",
+            tags: ["postgres", "critical", "v1.2.3"],
+        },
+        status: $Status.Enabled,
+        endpoint: {
+            port: 5432,
+        },
+        // A sub-service that is itself a Service, demonstrating recursion
+        sub_services: [
+            {
+                component: {
+                    id: "db-replica-01",
+                    name: "Database Replica",
+                    tags: ["postgres", "replica"],
+                },
+                status: $Status.Enabled, // This will override the default 'Disabled'
+                endpoint: { port: 5433, protocol: $Protocol.TCP },
+                sub_services: [
+                    {
+                        component: { id: "backup-agent", name: "Backup Agent" }, // tags will use default []
+                        endpoint: { port: 9000, protocol: $Protocol.UDP },
+                        status: $Status.Maintenance,
+                        // sub_services will use default []
+                    }
+                ]
+            }
+        ]
+    },
+
+    // Another service, using the creds_alias and permissions alias
+    "api-gateway": {
+        credentials: *creds_alias,
+        permissions: *admin_permissions,
+        port: 443,
+    },
+}

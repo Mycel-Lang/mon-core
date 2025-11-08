@@ -1,0 +1,15 @@
+{
+    simple_array: [1, "two", true, null],
+    array_of_objects: [
+        { name: "Alice", age: 30 },
+        { name: "Bob", age: 25 }
+    ],
+    nested_object: {
+        level1: {
+            level2: {
+                message: "deep"
+            }
+        }
+    },
+    mixed_array: [1, { key: "value" }, [2, 3]]
+}

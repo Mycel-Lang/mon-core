@@ -1,0 +1,61 @@
+{
+  "instance1": {
+    "name": "Instance 1",
+    "data": {
+      "source": "instance",
+      "config": {
+        "a": "overridden again",
+        "b": "overridden",
+        "c": 3,
+        "d": 4
+      },
+      "extra": "field"
+    }
+  },
+  "instance2": {
+    "name": "Instance 2",
+    "data": {
+      "source": "default",
+      "config": {
+        "a": 1,
+        "b": "overridden",
+        "c": 3
+      }
+    }
+  },
+  "final_list": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    {
+      "nested_spread": {
+        "a": "overridden again",
+        "b": "overridden",
+        "c": 3,
+        "d": 4
+      }
+    },
+    1,
+    2
+  ],
+  "tree": {
+    "id": "root",
+    "children": [
+      {
+        "id": "child1",
+        "children": []
+      },
+      {
+        "id": "child2",
+        "children": [
+          {
+            "id": "grandchild",
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}
