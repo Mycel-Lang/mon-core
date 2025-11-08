@@ -10,6 +10,8 @@ pub struct MonDocument {
 pub struct MonValue {
     pub kind: MonValueKind,
     pub anchor: Option<String>,
+    pub pos_start: usize,
+    pub pos_end: usize,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -47,6 +49,8 @@ pub struct Pair {
 pub struct ImportStatement {
     pub path: String,
     pub spec: ImportSpec,
+    pub pos_start: usize,
+    pub pos_end: usize,
 }
 
 #[derive(Debug, PartialEq, Clone)]
