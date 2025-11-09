@@ -1,6 +1,9 @@
-use crate::ast::{ImportSpec, ImportStatement, Member, MonDocument, MonValue, MonValueKind, SymbolTable as AstSymbolTable, TypeDef, TypeSpec};
+use crate::ast::{
+    ImportSpec, ImportStatement, Member, MonDocument, MonValue, MonValueKind,
+    SymbolTable as AstSymbolTable, TypeDef, TypeSpec,
+};
 use crate::error::{ResolverError, ValidationError};
-use miette::NamedSource;
+use miette::{NamedSource, SourceSpan};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -111,7 +114,32 @@ impl Resolver {
                 .insert(absolute_imported_path, resolved_imported_document);
         }
 
-        // 2. Collect type definitions and anchors
+        // After resolving all imports, process named imports to populate the symbol table
+        for import_statement in &document.imports {
+            if let ImportSpec::Named(specifiers) = &import_statement.spec {
+                let imported_path_str = import_statement.path.trim_matches('"');
+                let absolute_imported_path = current_dir.join(imported_path_str);
+                if let Some(imported_doc) = self.resolved_documents.get(&absolute_imported_path) {
+                    if let MonValueKind::Object(members) = &imported_doc.root.kind {
+                        for specifier in specifiers {
+                            if !specifier.is_anchor {
+                                for member in members {
+                                    if let Member::TypeDefinition(td) = member {
+                                        if td.name == specifier.name {
+                                            self.symbol_table
+                                                .types
+                                                .insert(specifier.name.clone(), td.def_type.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Collect type definitions and anchors from the current document
         if let MonValueKind::Object(members) = &document.root.kind {
             for member in members {
                 match member {
@@ -157,6 +185,8 @@ impl Resolver {
         file_path: &PathBuf,
         source_text: &str,
     ) -> Result<MonValue, ResolverError> {
+        let alias_span = value.get_source_span();
+
         match &mut value.kind {
             MonValueKind::Alias(alias_name) => {
                 // Resolve alias: find the anchored value and return a deep copy
@@ -168,7 +198,7 @@ impl Resolver {
                             file_path.to_string_lossy().to_string(),
                             source_text.to_string(),
                         ),
-                        span: (0, 0).into(),
+                        span: alias_span,
                     }
                 })?;
                 Ok(anchor_value.clone()) // Return a deep copy
@@ -187,7 +217,7 @@ impl Resolver {
                                         file_path.to_string_lossy().to_string(),
                                         source_text.to_string(),
                                     ),
-                                    span: (0, 0).into(),
+                                    span: alias_span,
                                 }
                             })?;
                             if let MonValueKind::Object(spread_members) = &anchor_value.kind {
@@ -201,14 +231,13 @@ impl Resolver {
                                     )?);
                                 }
                             } else {
-                                // TODO: Get actual span for the spread
                                 return Err(ResolverError::SpreadOnNonObject {
                                     name: spread_name.clone(),
                                     src: NamedSource::new(
                                         file_path.to_string_lossy().to_string(),
                                         source_text.to_string(),
                                     ),
-                                    span: (0, 0).into(),
+                                    span: alias_span,
                                 });
                             }
                         }
@@ -255,7 +284,7 @@ impl Resolver {
                                         file_path.to_string_lossy().to_string(),
                                         source_text.to_string(),
                                     ),
-                                    span: (0, 0).into(),
+                                    span: alias_span.into(),
                                 }
                             })?;
                             if let MonValueKind::Array(spread_elements) = &anchor_value.kind {
@@ -276,7 +305,7 @@ impl Resolver {
                                         file_path.to_string_lossy().to_string(),
                                         source_text.to_string(),
                                     ),
-                                    span: (0, 0).into(),
+                                    span: alias_span,
                                 });
                             }
                         }
@@ -350,7 +379,7 @@ impl Resolver {
         &mut self,
         value: &mut MonValue,
         type_spec: &TypeSpec,
-        field_name: &str, // For error reporting
+        field_name: &str,            // For error reporting
         imports: &[ImportStatement], // Change this parameter
         file_path: &PathBuf,
         source_text: &str,
@@ -446,34 +475,72 @@ impl Resolver {
                     "Any" => { /* Always valid, like you :D */ }
                     _ => {
                         // User-defined type (Struct or Enum)
-                        let (namespace, type_name_part) = if let Some((ns, tn)) = type_name.split_once('.') {
-                            (Some(ns), tn)
-                        } else {
-                            (None, type_name.as_str())
-                        };
+                        let (namespace, type_name_part) =
+                            if let Some((ns, tn)) = type_name.split_once('.') {
+                                (Some(ns), tn)
+                            } else {
+                                (None, type_name.as_str())
+                            };
 
                         let type_def = if let Some(namespace) = namespace {
                             // Find the import statement for this namespace
-                            let import_statement = imports.iter().find(|i| {
-                                if let ImportSpec::Namespace(ns) = &i.spec {
-                                    ns == namespace
-                                } else {
-                                    false
-                                }
-                            }).ok_or_else(|| ResolverError::Validation(ValidationError::UndefinedType {
-                                type_name: type_name.to_string(),
-                                src: NamedSource::new(
-                                    file_path.to_string_lossy().to_string(),
-                                    source_text.to_string(),
-                                ),
-                                span: (value.pos_start, value.pos_end - value.pos_start).into(),
-                            }))?;
+                            let import_statement = imports
+                                .iter()
+                                .find(|i| {
+                                    if let ImportSpec::Namespace(ns) = &i.spec {
+                                        ns == namespace
+                                    } else {
+                                        false
+                                    }
+                                })
+                                .ok_or_else(|| {
+                                    ResolverError::Validation(ValidationError::UndefinedType {
+                                        type_name: type_name.to_string(),
+                                        src: NamedSource::new(
+                                            file_path.to_string_lossy().to_string(),
+                                            source_text.to_string(),
+                                        ),
+                                        span: (value.pos_start, value.pos_end - value.pos_start)
+                                            .into(),
+                                    })
+                                })?;
 
                             let imported_path_str = import_statement.path.trim_matches('"');
-                            let absolute_imported_path = file_path.parent().unwrap().join(imported_path_str);
+                            let parent_dir = file_path.parent().ok_or_else(|| {
+                                // This case is unlikely but good to handle.
+                                // It means the file path is something like "/" or "C:\"
+                                ResolverError::ModuleNotFound {
+                                    path: import_statement.path.clone(),
+                                    src: NamedSource::new(
+                                        file_path.to_string_lossy().to_string(),
+                                        source_text.to_string(),
+                                    ),
+                                    span: (
+                                        import_statement.pos_start,
+                                        import_statement.pos_end - import_statement.pos_start,
+                                    )
+                                        .into(),
+                                }
+                            })?;
+                            let absolute_imported_path = parent_dir.join(imported_path_str);
 
-                            let imported_doc = self.resolved_documents.get(&absolute_imported_path).unwrap();
-                            
+                            let imported_doc = self
+                                .resolved_documents
+                                .get(&absolute_imported_path)
+                                .ok_or_else(|| {
+                                    // This indicates a logic error in the resolver, as the document
+                                    // should have been resolved and stored during the initial import pass.
+                                    ResolverError::ModuleNotFound {
+                                        path: absolute_imported_path.to_string_lossy().to_string(),
+                                        src: NamedSource::new(
+                                            file_path.to_string_lossy().to_string(),
+                                            source_text.to_string(),
+                                        ),
+                                        span: (value.pos_start, value.pos_end - value.pos_start)
+                                            .into(),
+                                    }
+                                })?;
+
                             if let MonValueKind::Object(members) = &imported_doc.root.kind {
                                 members.iter().find_map(|m| {
                                     if let Member::TypeDefinition(td) = m {
@@ -738,7 +805,14 @@ impl Resolver {
         if collection_types.len() == 1 && matches!(collection_types[0], TypeSpec::Spread(_)) {
             if let TypeSpec::Spread(inner_type) = &collection_types[0] {
                 for element in elements {
-                    self.validate_value(element, inner_type, field_name, imports, file_path, source_text)?;
+                    self.validate_value(
+                        element,
+                        inner_type,
+                        field_name,
+                        imports,
+                        file_path,
+                        source_text,
+                    )?;
                 }
                 return Ok(());
             }
@@ -812,7 +886,14 @@ impl Resolver {
             )?;
             if let TypeSpec::Spread(inner_type) = &collection_types[1] {
                 for element in &mut elements[1..] {
-                    self.validate_value(element, inner_type, field_name, imports, file_path, source_text)?;
+                    self.validate_value(
+                        element,
+                        inner_type,
+                        field_name,
+                        imports,
+                        file_path,
+                        source_text,
+                    )?;
                 }
             }
             return Ok(());
@@ -851,7 +932,14 @@ impl Resolver {
             )?;
             if let TypeSpec::Spread(inner_type) = &collection_types[0] {
                 for element in head {
-                    self.validate_value(element, inner_type, field_name, imports, file_path, source_text)?;
+                    self.validate_value(
+                        element,
+                        inner_type,
+                        field_name,
+                        imports,
+                        file_path,
+                        source_text,
+                    )?;
                 }
             }
             return Ok(());

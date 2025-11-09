@@ -487,3 +487,9 @@ fn test_parser_for_schemas_file() {
     let mut parser = Parser::new(&source).unwrap();
     let _ = parser.parse_document().unwrap();
 }
+
+#[test]
+fn test_named_import_validation() {
+    let source = fs::read_to_string("tests/named_import_main.mon").unwrap();
+    resolve_ok(&source, "tests/named_import_main.mon");
+}

@@ -1,3 +1,4 @@
+use miette::SourceSpan;
 use std::fmt::{Debug, Display};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -12,6 +13,12 @@ pub struct MonValue {
     pub anchor: Option<String>,
     pub pos_start: usize,
     pub pos_end: usize,
+}
+
+impl MonValue {
+    pub fn get_source_span(&self) -> SourceSpan {
+        SourceSpan::new(self.pos_start.into(), self.pos_end - self.pos_start)
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

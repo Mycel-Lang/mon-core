@@ -1,65 +1,63 @@
 # MON (Mycel Object Notation) Core
 
-This project is the core Rust implementation for **MON (Mycel Object Notation)**, a human-friendly data notation
-language.
+`mon-core` is the foundational Rust implementation for **MON (Mycel Object Notation)**, a human-friendly data notation
+language designed for configuration, data exchange, and more. It prioritizes readability, structure, and reusability.
 
-## High-Level Overview: Building a MON Library for LSP and Compiler
+## Key Features
 
-To build a robust library for MON that can power both a Language Server Protocol (LSP) and a compiler like `mycelc`, we
-need a layered architecture that separates parsing the text from understanding its meaning.
+* **Human-Readable Syntax:** Clean, intuitive syntax with support for comments and unquoted keys.
+* **Structured Data:** Organizes data in "labeled containers" (objects) with `key: value` pairs and arrays.
+* **Data Reusability (DRY):** Features like **anchors (`&`)**, **aliases (`*`)**, and **spreads (`...*`)** to avoid
+  repetition and promote modularity.
+* **Robust Type System:**
+    * **Type Definitions:** Supports custom `#struct` and `#enum` definitions.
+    * **Validation:** Built-in type validation using `:: Type` annotations, ensuring data conforms to defined schemas.
+    * **Collection Validation:** Advanced validation for arrays, including single-type, spread, tuple-like, and mixed
+      collections.
+* **Modularity & Imports:**
+    * **Cross-File References:** Allows splitting data across multiple files using `import` statements.
+    * **Namespaced Types:** Supports resolving and validating types defined in imported files, including namespaced
+      references.
+* **Rich Error Reporting:** Utilizes `miette` for clear, graphical diagnostics with source code snippets for parsing,
+  resolution, and validation errors.
 
-Here is a high-level overview of the essential components:
+## Project Architecture (High-Level)
 
-### 1. The Parser & Concrete Syntax Tree (CST/ast)
+`mon-core` is built with a layered architecture to support advanced tooling like Language Server Protocol (LSP) and
+compilers (`mycelc`). The core pipeline involves:
 
-This is the foundation. The parser's job is to read the raw MON text and turn it into a tree structure that represents
-the code exactly as it was written, including comments, whitespace, and source code positions (spans).
+1. **Parser & AST/CST:** Transforms raw MON text into a syntax tree, designed to be error-tolerant for real-time
+   feedback.
+2. **Semantic Analyzer & Semantic Model:** Gives meaning to the syntax tree through validation, reference resolution (
+   anchors, spreads, imports), and type checking.
+3. **Query & Traversal API:** Provides an interface for external tools to navigate and inspect both the raw syntax tree
+   and the fully resolved semantic model.
 
-* **Input:** Raw MON text as a string.
-* **Output:** An **Abstract Syntax Tree (ast)** or a **Concrete Syntax Tree (CST)**.
-* **Key Requirement (for LSP):** It must be **error-tolerant**. It should be able to produce a tree even if the code is
-  incomplete or has syntax errors, allowing the LSP to provide feedback as the user types.
+For a detailed breakdown of the architecture and future plans, please refer to `roadmap.md`.
 
-### 2. The Semantic Analyzer & Semantic Model
+## Building and Running
 
-This layer takes the raw syntax tree from the parser and gives it meaning. It understands the rules of MON beyond just
-the basic syntax.
+This is a standard Rust library project.
 
-* **Input:** The ast/CST from the parser.
-* **Responsibilities:**
-    * **Validation:** Check for errors like duplicate keys, invalid values, etc.
-    * **Reference Resolution:** Resolve anchors and spreads, connecting reused data.
-    * **Type Checking:** If the MON file uses type definitions, this layer validates that the data conforms to those
-      types.
-* **Output:** A **Semantic Model**. This is a cleaner, high-level representation of the data's meaning, stripped of
-  purely syntactical details. It represents the fully resolved and validated MON data.
+* **Build the project:**
+  ```bash
+  cargo build
+  ```
 
-### 3. A Query and Traversal API
+* **Run tests:**
+  ```bash
+  cargo test
+  ```
 
-This is the interface that consumers like the LSP and `mycelc` will use to interact with the data. It provides functions
-to navigate and inspect both the raw syntax tree and the semantic model.
+* **Check for compilation errors without building:**
+  ```bash
+  cargo check
+  ```
 
-* **Examples:**
-    * `getNodeAt(position)`: For an LSP to find what the cursor is pointing at.
-    * `getTypeOf(node)`: To get the validated type of a value.
-    * `getDefinition(reference)`: To find where an anchor is defined.
+## Development Conventions
 
-### How They Work Together
-
-The data flows through the library in a pipeline:
-
-```
-Raw Text -> [Parser] -> ast/CST -> [Semantic Analyzer] -> Semantic Model
-   ^             ^           ^               ^                 ^
-   |             |           |               |                 |
-(User Input)  (Syntax       (LSP uses      (Semantic         (Compiler/LSP
-              Errors)      for basic       Errors)           uses for deep
-                           highlighting)                     understanding)
-```
-
-By separating the components, we create a powerful and flexible library:
-
-* The **LSP** can primarily use the **ast/CST** for fast, syntax-aware features like highlighting and formatting, and
-  use the **Semantic Model** for deeper understanding like "go to definition" and type-aware autocompletion.
-* The **`mycelc` compiler** can skip the raw syntax details and work directly with the clean, validated **Semantic Model
-  **, confident that the data is well-formed and correct.
+* **Code Style:** Follow standard Rust conventions and formatting (`rustfmt`).
+* **Testing:** Unit tests are located within the source files under a `#[cfg(test)]` module and in the `tests/`
+  directory. Add tests for any new or modified functionality.
+* **Documentation:** The `docs` directory contains the specification and user guide for the MON language. Changes to the
+  language syntax or features should be reflected in these documents.
