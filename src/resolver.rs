@@ -128,7 +128,7 @@ impl Resolver {
                                         if td.name == specifier.name {
                                             self.symbol_table
                                                 .types
-                                                .insert(specifier.name.clone(), td.def_type.clone());
+                                                .insert(specifier.name.clone(), td.clone());
                                         }
                                     }
                                 }
@@ -146,7 +146,7 @@ impl Resolver {
                     Member::TypeDefinition(type_def) => {
                         self.symbol_table
                             .types
-                            .insert(type_def.name.clone(), type_def.def_type.clone());
+                            .insert(type_def.name.clone(), type_def.clone());
                     }
                     Member::Pair(pair) => {
                         if let Some(anchor_name) = &pair.value.anchor {
@@ -384,7 +384,7 @@ impl Resolver {
         source_text: &str,
     ) -> Result<(), ResolverError> {
         match type_spec {
-            TypeSpec::Simple(type_name) => {
+            TypeSpec::Simple(type_name, _) => {
                 // Handle built-in types and user-defined types (structs/enums)
                 match type_name.as_str() {
                     "String" => {
@@ -553,7 +553,7 @@ impl Resolver {
                                 None
                             }
                         } else {
-                            self.symbol_table.types.get(type_name_part).cloned()
+                            self.symbol_table.types.get(type_name_part).map(|td| td.def_type.clone())
                         };
 
                         if let Some(type_def) = type_def {
@@ -746,7 +746,7 @@ impl Resolver {
                     }
                 }
             }
-            TypeSpec::Collection(collection_types) => {
+            TypeSpec::Collection(collection_types, _) => {
                 // Handle array validation
                 if let MonValueKind::Array(elements) = &mut value.kind {
                     self.validate_collection(
@@ -770,7 +770,7 @@ impl Resolver {
                     }));
                 }
             }
-            TypeSpec::Spread(_) => {
+            TypeSpec::Spread(_, _) => {
                 // Spread types are handled during parsing/resolution, not validation directly
                 return Ok(());
             }
@@ -788,7 +788,7 @@ impl Resolver {
         source_text: &str,
     ) -> Result<(), ResolverError> {
         // Case 1: [T] - Exactly one element of type T
-        if collection_types.len() == 1 && !matches!(collection_types[0], TypeSpec::Spread(_)) {
+        if collection_types.len() == 1 && !matches!(collection_types[0], TypeSpec::Spread(_, _)) {
             self.validate_value(
                 &mut elements[0],
                 &collection_types[0],
@@ -801,8 +801,8 @@ impl Resolver {
         }
 
         // Case 2: [T...] - Zero or more elements of type T
-        if collection_types.len() == 1 && matches!(collection_types[0], TypeSpec::Spread(_)) {
-            if let TypeSpec::Spread(inner_type) = &collection_types[0] {
+        if collection_types.len() == 1 && matches!(collection_types[0], TypeSpec::Spread(_, _)) {
+            if let TypeSpec::Spread(inner_type, _) = &collection_types[0] {
                 for element in elements {
                     self.validate_value(
                         element,
@@ -820,7 +820,7 @@ impl Resolver {
         // Case 3: Tuple-like [T1, T2, ...]
         let has_spread = collection_types
             .iter()
-            .any(|t| matches!(t, TypeSpec::Spread(_)));
+            .any(|t| matches!(t, TypeSpec::Spread(_, _)));
         if !has_spread {
             if elements.len() != collection_types.len() {
                 // TODO: Better error for wrong number of elements
@@ -855,8 +855,8 @@ impl Resolver {
 
         // Case 4: [T1, T2...] - One or more elements, first is T1, rest are T2
         if collection_types.len() == 2
-            && !matches!(collection_types[0], TypeSpec::Spread(_))
-            && matches!(collection_types[1], TypeSpec::Spread(_))
+            && !matches!(collection_types[0], TypeSpec::Spread(_, _))
+            && matches!(collection_types[1], TypeSpec::Spread(_, _))
         {
             if elements.is_empty() {
                 return Err(ResolverError::Validation(ValidationError::TypeMismatch {
@@ -883,7 +883,7 @@ impl Resolver {
                 file_path,
                 source_text,
             )?;
-            if let TypeSpec::Spread(inner_type) = &collection_types[1] {
+            if let TypeSpec::Spread(inner_type, _) = &collection_types[1] {
                 for element in &mut elements[1..] {
                     self.validate_value(
                         element,
@@ -900,8 +900,8 @@ impl Resolver {
 
         // Case 5: [T1..., T2] - One or more elements, last is T2, rest are T1
         if collection_types.len() == 2
-            && matches!(collection_types[0], TypeSpec::Spread(_))
-            && !matches!(collection_types[1], TypeSpec::Spread(_))
+            && matches!(collection_types[0], TypeSpec::Spread(_, _))
+            && !matches!(collection_types[1], TypeSpec::Spread(_, _))
         {
             if elements.is_empty() {
                 return Err(ResolverError::Validation(ValidationError::TypeMismatch {
@@ -929,7 +929,7 @@ impl Resolver {
                 file_path,
                 source_text,
             )?;
-            if let TypeSpec::Spread(inner_type) = &collection_types[0] {
+            if let TypeSpec::Spread(inner_type, _) = &collection_types[0] {
                 for element in head {
                     self.validate_value(
                         element,

@@ -365,28 +365,43 @@ impl<'a> Parser<'a> {
 
     /// TypeDefinition ::= Identifier ":" ( StructDefinition | EnumDefinition )
     fn parse_type_definition(&mut self) -> Result<TypeDefinition, MonError> {
+        let name_token = self.current_token()?.clone();
         let name = self.parse_key()?;
         self.expect(TokenType::Colon)?;
+        let hash_token = self.current_token()?.clone();
         self.expect(TokenType::Hash)?;
 
         let token = self.current_token()?;
-        let def_type = match &token.ttype {
+        let (def_type, end_pos) = match &token.ttype {
             TokenType::Identifier(s) if s == "struct" => {
                 self.advance();
-                self.parse_struct_definition().map(TypeDef::Struct)
+                let mut struct_def = self.parse_struct_definition()?;
+                let end_pos = struct_def.pos_end;
+                struct_def.pos_start = hash_token.pos_start;
+                Ok((TypeDef::Struct(struct_def), end_pos))
             }
             TokenType::Identifier(s) if s == "enum" => {
                 self.advance();
-                self.parse_enum_definition().map(TypeDef::Enum)
+                let mut enum_def = self.parse_enum_definition()?;
+                let end_pos = enum_def.pos_end;
+                enum_def.pos_start = hash_token.pos_start;
+                Ok((TypeDef::Enum(enum_def), end_pos))
             }
             _ => self.err_unexpected("'struct' or 'enum' keyword"),
         }?;
 
-        Ok(TypeDefinition { name, def_type })
+        Ok(TypeDefinition {
+            name,
+            name_span: (name_token.pos_start, name_token.pos_end - name_token.pos_start).into(),
+            def_type,
+            pos_start: name_token.pos_start,
+            pos_end: end_pos,
+        })
     }
 
     /// StructDefinition ::= "{" [ FieldList ] "}"
     fn parse_struct_definition(&mut self) -> Result<StructDef, MonError> {
+        let start_token = self.current_token()?.clone();
         self.expect(TokenType::LBrace)?;
         let mut fields = Vec::new();
         if !self.check(TokenType::RBrace) {
@@ -400,8 +415,13 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+        let end_token = self.current_token()?.clone();
         self.expect(TokenType::RBrace)?;
-        Ok(StructDef { fields })
+        Ok(StructDef {
+            fields,
+            pos_start: start_token.pos_start,
+            pos_end: end_token.pos_end,
+        })
     }
 
     /// FieldDefinition ::= Identifier "(" Type ")" [ "=" Value ]
@@ -426,6 +446,7 @@ impl<'a> Parser<'a> {
 
     /// EnumDefinition ::= "{" [ Identifier { "," Identifier } [ "," ] ] "}"
     fn parse_enum_definition(&mut self) -> Result<EnumDef, MonError> {
+        let start_token = self.current_token()?.clone();
         self.expect(TokenType::LBrace)?;
         let mut variants = Vec::new();
         if !self.check(TokenType::RBrace) {
@@ -439,8 +460,13 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+        let end_token = self.current_token()?.clone();
         self.expect(TokenType::RBrace)?;
-        Ok(EnumDef { variants })
+        Ok(EnumDef {
+            variants,
+            pos_start: start_token.pos_start,
+            pos_end: end_token.pos_end,
+        })
     }
 
     /// Validation ::= "::" Type
@@ -454,6 +480,7 @@ impl<'a> Parser<'a> {
 
     /// Type ::= CollectionType | Identifier | "String" | ...
     fn parse_type_spec(&mut self) -> Result<TypeSpec, MonError> {
+        let start_token = self.current_token()?.clone();
         if self.check(TokenType::LBracket) {
             // CollectionType ::= "[" Type [ "..." ] { "," Type [ "..." ] } "]"
             self.expect(TokenType::LBracket)?;
@@ -462,7 +489,9 @@ impl<'a> Parser<'a> {
                 loop {
                     let mut type_spec = self.parse_type_spec()?;
                     if self.match_token(TokenType::Spread) {
-                        type_spec = TypeSpec::Spread(Box::new(type_spec));
+                        let end_token = self.current_token_before_advance()?.clone();
+                        let span = (type_spec.get_span().offset(), end_token.pos_end - type_spec.get_span().offset()).into();
+                        type_spec = TypeSpec::Spread(Box::new(type_spec), span);
                     }
                     types.push(type_spec);
 
@@ -474,11 +503,16 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
+            let end_token = self.current_token()?.clone();
             self.expect(TokenType::RBracket)?;
-            Ok(TypeSpec::Collection(types))
+            let span = (start_token.pos_start, end_token.pos_end - start_token.pos_start).into();
+            Ok(TypeSpec::Collection(types, span))
         } else {
             // Simple Type
-            self.parse_key().map(TypeSpec::Simple)
+            let name = self.parse_key()?;
+            let end_token = self.current_token_before_advance()?.clone();
+            let span = (start_token.pos_start, end_token.pos_end - start_token.pos_start).into();
+            Ok(TypeSpec::Simple(name, span))
         }
     }
 

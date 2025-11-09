@@ -1,0 +1,8 @@
+import { User } from "./named_import_schemas.mon"
+
+{
+    user1 :: User = {
+        id: 1,
+        name: "Alice",
+    },
+}

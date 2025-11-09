@@ -1,0 +1,8 @@
+import * as schemas from "./cross_file_schemas.mon"
+
+{
+    user1 :: schemas.User = {
+        id: 1,
+        name: "Alice",
+    },
+}

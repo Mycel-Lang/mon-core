@@ -75,7 +75,10 @@ pub struct ImportSpecifier {
 #[derive(Debug, PartialEq, Clone)]
 pub struct TypeDefinition {
     pub name: String,
+    pub name_span: SourceSpan,
     pub def_type: TypeDef,
+    pub pos_start: usize,
+    pub pos_end: usize,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -84,9 +87,20 @@ pub enum TypeDef {
     Enum(EnumDef),
 }
 
+impl TypeDef {
+    pub fn get_span(&self) -> SourceSpan {
+        match self {
+            TypeDef::Struct(s) => (s.pos_start, s.pos_end - s.pos_start).into(),
+            TypeDef::Enum(e) => (e.pos_start, e.pos_end - e.pos_start).into(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct StructDef {
     pub fields: Vec<FieldDef>,
+    pub pos_start: usize,
+    pub pos_end: usize,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -99,14 +113,26 @@ pub struct FieldDef {
 #[derive(Debug, PartialEq, Clone)]
 pub struct EnumDef {
     pub variants: Vec<String>,
+    pub pos_start: usize,
+    pub pos_end: usize,
 }
 
 // Represents a type specification, e.g., `String`, `[Number...]`
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypeSpec {
-    Simple(String),
-    Collection(Vec<TypeSpec>),
-    Spread(Box<TypeSpec>),
+    Simple(String, SourceSpan),
+    Collection(Vec<TypeSpec>, SourceSpan),
+    Spread(Box<TypeSpec>, SourceSpan),
+}
+
+impl TypeSpec {
+    pub fn get_span(&self) -> SourceSpan {
+        match self {
+            TypeSpec::Simple(_, span) => *span,
+            TypeSpec::Collection(_, span) => *span,
+            TypeSpec::Spread(_, span) => *span,
+        }
+    }
 }
 
 impl Display for Member {
@@ -122,7 +148,7 @@ impl Display for Member {
 
 #[derive(Debug, Default)]
 pub struct SymbolTable {
-    pub types: std::collections::HashMap<String, TypeDef>,
+    pub types: std::collections::HashMap<String, TypeDefinition>,
 }
 
 impl SymbolTable {
@@ -137,12 +163,9 @@ impl Display for MonDocument {
     }
 }
 
-impl Display for MonValue {
+impl Display for MonValueKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if let Some(anchor) = &self.anchor {
-            write!(f, "&{} ", anchor)?;
-        }
-        match &self.kind {
+        match self {
             MonValueKind::String(s) => write!(f, "\"{}\"", s),
             MonValueKind::Number(n) => write!(f, "{}", n),
             MonValueKind::Boolean(b) => write!(f, "{}", b),
@@ -176,5 +199,14 @@ impl Display for MonValue {
             }
             MonValueKind::ArraySpread(s) => write!(f, "...*{}", s),
         }
+    }
+}
+
+impl Display for MonValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if let Some(anchor) = &self.anchor {
+            write!(f, "&{} ", anchor)?;
+        }
+        write!(f, "{}", self.kind)
     }
 }

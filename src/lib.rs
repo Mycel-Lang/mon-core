@@ -5,4 +5,5 @@ pub mod parser;
 pub mod resolver;
 pub mod utils;
 pub mod api;
-mod serialization;
+pub mod serialization;
+pub mod lsp;
