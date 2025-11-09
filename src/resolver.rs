@@ -3,7 +3,7 @@ use crate::ast::{
     SymbolTable as AstSymbolTable, TypeDef, TypeSpec,
 };
 use crate::error::{ResolverError, ValidationError};
-use miette::{NamedSource, SourceSpan};
+use miette::NamedSource;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,11 +12,11 @@ pub struct Resolver {
     // Stores resolved documents by their absolute path
     resolved_documents: HashMap<PathBuf, MonDocument>,
     // Stack to detect circular dependencies during import resolution
-    resolving_stack: Vec<(PathBuf, Option<ImportStatement>)>,
+    resolving_stack: Vec<(PathBuf, Option<ImportStatement>)>, 
     // Global symbol table for types
-    symbol_table: AstSymbolTable,
+    pub symbol_table: AstSymbolTable,
     // Global map for anchors
-    anchors: HashMap<String, MonValue>,
+    pub anchors: HashMap<String, MonValue>,
 }
 
 impl Resolver {
@@ -177,7 +177,6 @@ impl Resolver {
 
         Ok(resolved_doc)
     }
-
     // Helper function to recursively resolve aliases and spreads within a MonValue
     fn resolve_value(
         &mut self,

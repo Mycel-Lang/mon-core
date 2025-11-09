@@ -38,8 +38,7 @@ This phase focuses on creating a stable public API that external tools can use.
   fully resolved and validated result.
 * **[To-Do] JSON Serialization:** Provide a mechanism to convert a resolved MON document into a canonical JSON string,
   which is the most common use case for consumers.
-* **[To-Do] Improve API Ergonomics:** Refine the public-facing data structures and error types to be intuitive and easy
-  to use for library consumers.
+*   **[x] Improve API Ergonomics:** Refine the public-facing data structures and error types to be intuitive and easy to use for library consumers.
 
 ### Phase 4: Language Server and Developer Experience
 
