@@ -1,5 +1,7 @@
+use log::error;
 use miette::SourceSpan;
 use std::fmt::{Debug, Display};
+use std::panic::Location;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct MonDocument {
@@ -210,3 +212,24 @@ impl Display for MonValue {
         write!(f, "{}", self.kind)
     }
 }
+
+impl Pair {
+    #[track_caller]
+    pub fn get_span(&self) -> SourceSpan {
+        match &self.validation {
+            None => {
+                error!(
+                    "No validation for `Pair`found for source span called by {}",
+                    Location::caller()
+                );
+                SourceSpan::new(0.into(), 0)
+            }
+            Some(valid) => match valid {
+                TypeSpec::Simple(_, source_span) => *source_span,
+                TypeSpec::Collection(_, source_span) => *source_span,
+                TypeSpec::Spread(_, source_span) => *source_span,
+            },
+        }
+    }
+}
+

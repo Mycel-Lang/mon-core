@@ -1,9 +1,9 @@
+pub mod api;
 pub mod ast;
 pub mod error;
 pub mod lexer;
+pub mod lsp;
 pub mod parser;
 pub mod resolver;
-pub mod utils;
-pub mod api;
 pub mod serialization;
-pub mod lsp;
+pub mod utils;
