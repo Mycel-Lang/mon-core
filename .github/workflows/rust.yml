@@ -1,0 +1,166 @@
+name: Rust CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # keep color in logs
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust toolchain (stable) + components
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Cache Cargo registry & git
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-registry-${{ runner.os }}-
+
+      - name: Cache cargo bin (cargo-install binaries)
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin
+          key: cargo-bin-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-bin-${{ runner.os }}-
+
+      - name: Cache sccache dir
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/sccache
+          key: sccache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            sccache-${{ runner.os }}-
+
+      - name: Cache target directory
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: target-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            target-${{ runner.os }}-
+
+      - name: Install sccache (if missing)
+        run: |
+          if ! command -v sccache >/dev/null 2>&1; then
+            echo "Installing sccache..."
+            cargo install --locked sccache
+          else
+            echo "sccache already installed"
+          fi
+
+      - name: Configure sccache (env)
+        run: |
+          echo "RUSTC_WRAPPER=$(which sccache)" >> $GITHUB_ENV
+          # sccache cache dir - keep in runner cache or tmp
+          echo "SCCACHE_DIR=$HOME/.cache/sccache" >> $GITHUB_ENV
+          # optional: limit cache size
+          echo "SCCACHE_CACHE_SIZE=10G" >> $GITHUB_ENV
+
+      - name: Install cargo-chef (if missing)
+        run: |
+          if ! command -v cargo-chef >/dev/null 2>&1; then
+            echo "Installing cargo-chef..."
+            cargo install --locked cargo-chef
+          else
+            echo "cargo-chef already present"
+          fi
+
+      - name: Ensure cargo-audit (cached)
+        run: |
+          if ! command -v cargo-audit >/dev/null 2>&1; then
+            echo "Installing cargo-audit..."
+            cargo install --locked cargo-audit
+          else
+            echo "cargo-audit already present"
+          fi
+
+      # ------ CARGO-CHEF: prepare/cook for dependency caching ------
+      - name: Prepare cargo-chef recipe
+        run: |
+          if [ ! -t 1 ]; then
+              cargo chef prepare --recipe-path recipe.json
+          else
+              echo "Skipping cargo-chef prepare: stdout is a terminal"
+          fi
+
+      - name: Cook dependencies (uses recipe)
+        run: |
+          if [ ! -t 1 ]; then
+              cargo chef cook --recipe-path recipe.json
+          else
+              echo "Skipping cargo-chef cook: stdout is a terminal"
+          fi
+
+      # ------ BUILD & TEST (reuses sccache + cooked deps) ------
+      - name: Build (debug) — workspace, all targets
+        run: |
+          cargo build --workspace --all-targets --features lsp --locked --verbose
+
+      - name: Test
+        run: |
+          cargo test --workspace --all-targets --features lsp --locked --verbose
+
+      # ------ LINT & FORMAT ------
+      - name: Clippy (lint only; print warnings, don't fail on them)
+        run: |
+          # skip linting dependencies for speed; show pedantic warnings but keep CI green
+          cargo clippy --workspace --all-targets --features lsp --no-deps -- -W clippy::pedantic || true
+
+      - name: Format check (rustfmt)
+        run: |
+          cargo fmt --all -- --check
+
+      # ------ SECURITY ------
+      - name: Security audit (cargo-audit)
+        run: |
+          cargo audit --deny warnings
+
+      # ------ METRICS / ARTIFACTS ------
+      - name: Save clippy output (artifact)
+        if: always()
+        run: |
+          mkdir -p ci-artifacts
+          cargo clippy --workspace --all-targets --features lsp --no-deps --message-format=json > ci-artifacts/clippy.json || true
+
+      - name: Upload CI artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-artifacts
+          path: ci-artifacts
+
+      - name: Print sccache stats
+        if: always()
+        run: |
+          if command -v sccache >/dev/null 2>&1; then
+            sccache --show-stats || true
+          else
+            echo "sccache not installed"
+          fi

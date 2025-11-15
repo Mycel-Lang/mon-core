@@ -1,16 +1,27 @@
 [package]
 name = "mon-core"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "A robust parser and validator for the Mycel Object Notation (MON) language, designed for fast, efficient, and human-friendly configuration."
+license = "MIT"
+repository = "https://github.com/Mycel-Lang/mon-core"
+readme = "README.md"
+keywords = ["parser", "config", "serialization", "validation", "mon"]
+categories = ["config", "parser-implementations"]
+authors = ["Shrub <TheShurb@protonmail.com>"]
+homepage = "https://github.com/Mycel-Lang/mon"
+documentation = "https://docs.rs/mon-core"
 
 [dependencies]
 miette = { version = "7.6.0", features = ["fancy"] }
 thiserror = "2.0.17"
 log = "0.4.28"
-serde = { version = "1.0", features = ["derive"] } # Enable the `derive` feature for automatic Serialize/Deserialize implementations
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 
-[dev-dependencies]
-pretty_assertions = "1.4"
+[features]
+lsp = []
 
+[dev-dependencies]
+cargo-audit = "0.22.0"

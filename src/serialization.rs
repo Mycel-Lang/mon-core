@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
-use serde::{Serialize};
 use crate::ast::{Member, MonValue, MonValueKind};
+use serde::Serialize;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(untagged)]
@@ -19,9 +19,7 @@ pub(crate) fn to_value(mon_value: &MonValue) -> Value {
         MonValueKind::Number(n) => Value::Number(*n),
         MonValueKind::Boolean(b) => Value::Boolean(*b),
         MonValueKind::Null => Value::Null,
-        MonValueKind::Array(arr) => {
-            Value::Array(arr.iter().map(to_value).collect())
-        }
+        MonValueKind::Array(arr) => Value::Array(arr.iter().map(to_value).collect()),
         MonValueKind::Object(obj) => {
             let mut map = BTreeMap::new();
             for member in obj {

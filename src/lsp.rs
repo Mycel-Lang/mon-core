@@ -14,6 +14,8 @@ pub struct SymbolInfo<'a> {
     pub validation: Option<&'a TypeSpec>,
 }
 
+#[cfg(feature = "lsp")]
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum SemanticTokenType {
     Struct,
@@ -30,6 +32,8 @@ pub enum SemanticTokenType {
     Property, // For object keys
 }
 
+#[cfg(feature = "lsp")]
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Clone)]
 pub struct SemanticToken {
     pub span: SourceSpan,
@@ -93,13 +97,13 @@ fn find_node_in_type_spec<'a>(type_spec: &'a TypeSpec, position: usize) -> Optio
     Some(FoundNode::TypeSpec(type_spec))
 }
 
-pub fn find_all_usages<'a>(root: &'a MonValue, name: &str) -> Vec<SourceSpan> {
+pub fn find_all_usages(root: &MonValue, name: &str) -> Vec<SourceSpan> {
     let mut usages = Vec::new();
     find_all_usages_recursive(root, name, &mut usages);
     usages
 }
 
-fn find_all_usages_recursive<'a>(value: &'a MonValue, name: &str, usages: &mut Vec<SourceSpan>) {
+fn find_all_usages_recursive(value: &MonValue, name: &str, usages: &mut Vec<SourceSpan>) {
     match &value.kind {
         MonValueKind::Alias(_alias_name) if _alias_name == name => {
             usages.push(value.get_source_span());
@@ -123,11 +127,7 @@ fn find_all_usages_recursive<'a>(value: &'a MonValue, name: &str, usages: &mut V
     }
 }
 
-fn find_all_usages_in_type_spec<'a>(
-    type_spec: &'a TypeSpec,
-    name: &str,
-    usages: &mut Vec<SourceSpan>,
-) {
+fn find_all_usages_in_type_spec(type_spec: &TypeSpec, name: &str, usages: &mut Vec<SourceSpan>) {
     match type_spec {
         TypeSpec::Simple(type_name, span) if type_name == name => {
             usages.push(*span);
@@ -144,21 +144,24 @@ fn find_all_usages_in_type_spec<'a>(
     }
 }
 
+#[cfg(feature = "lsp")]
+#[allow(dead_code)]
 pub fn generate_semantic_tokens(
     root: &MonValue,
-    symbol_table: &SymbolTable,
+    _symbol_table: &SymbolTable,
     anchors: &HashMap<String, MonValue>,
 ) -> Vec<SemanticToken> {
     let mut tokens = Vec::new();
-    generate_semantic_tokens_recursive(root, symbol_table, anchors, &mut tokens);
+    generate_semantic_tokens_recursive(root, _symbol_table, anchors, &mut tokens);
     tokens
 }
 
 #[track_caller]
 // this is needed because pair.get_span tracks caller for better error messages.
+#[allow(dead_code)]
 fn generate_semantic_tokens_recursive(
     value: &MonValue,
-    symbol_table: &SymbolTable,
+    _symbol_table: &SymbolTable,
     anchors: &HashMap<String, MonValue>,
     tokens: &mut Vec<SemanticToken>,
 ) {
@@ -167,19 +170,16 @@ fn generate_semantic_tokens_recursive(
             for member in members {
                 match member {
                     Member::Pair(pair) => {
-                        // Key
                         tokens.push(SemanticToken {
                             span: pair.get_span(),
                             token_type: SemanticTokenType::Property,
                         });
-                        // Validation
                         if let Some(validation) = &pair.validation {
                             generate_semantic_tokens_for_type_spec(validation, tokens);
                         }
-                        // Value
                         generate_semantic_tokens_recursive(
                             &pair.value,
-                            symbol_table,
+                            _symbol_table,
                             anchors,
                             tokens,
                         );
@@ -207,7 +207,7 @@ fn generate_semantic_tokens_recursive(
                                 }
                             }
                             TypeDef::Enum(e) => {
-                                for variant in &e.variants {
+                                for _variant in &e.variants {
                                     tokens.push(SemanticToken {
                                         span: SourceSpan::from((e.pos_start, e.pos_end)),
                                         token_type: SemanticTokenType::Property, // Enum variants can be properties
@@ -222,7 +222,8 @@ fn generate_semantic_tokens_recursive(
         }
         MonValueKind::Array(elements) => {
             for element in elements {
-                generate_semantic_tokens_recursive(element, symbol_table, anchors, tokens);
+                generate_semantic_tokens_recursive(element, _symbol_table, anchors, tokens);
+                // Renamed
             }
         }
         MonValueKind::Alias(_) => {
@@ -270,6 +271,7 @@ fn generate_semantic_tokens_recursive(
     }
 }
 
+#[allow(dead_code)]
 fn generate_semantic_tokens_for_type_spec(type_spec: &TypeSpec, tokens: &mut Vec<SemanticToken>) {
     match type_spec {
         TypeSpec::Simple(_name, span) => {
@@ -290,10 +292,10 @@ fn generate_semantic_tokens_for_type_spec(type_spec: &TypeSpec, tokens: &mut Vec
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "lsp"))]
 mod tests {
     use super::*;
-    use crate::ast::{EnumDef, Member, MonValue, MonValueKind, Pair, StructDef, TypeDef, TypeSpec};
+    use crate::ast::{EnumDef, Member, MonValue, MonValueKind, Pair, TypeDef, TypeSpec};
     use miette::SourceSpan;
     use std::collections::HashMap;
 
@@ -424,26 +426,18 @@ mod tests {
         let symbol_table = SymbolTable::new();
 
         let tokens = generate_semantic_tokens(&val, &symbol_table, &anchors);
-        assert!(
-            tokens
-                .iter()
-                .any(|t| t.token_type == SemanticTokenType::Anchor)
-        );
-        assert!(
-            tokens
-                .iter()
-                .any(|t| t.token_type == SemanticTokenType::Property)
-        );
-        assert!(
-            tokens
-                .iter()
-                .any(|t| t.token_type == SemanticTokenType::Type)
-        );
-        assert!(
-            tokens
-                .iter()
-                .any(|t| t.token_type == SemanticTokenType::String)
-        );
+        assert!(tokens
+            .iter()
+            .any(|t| t.token_type == SemanticTokenType::Anchor));
+        assert!(tokens
+            .iter()
+            .any(|t| t.token_type == SemanticTokenType::Property));
+        assert!(tokens
+            .iter()
+            .any(|t| t.token_type == SemanticTokenType::Type));
+        assert!(tokens
+            .iter()
+            .any(|t| t.token_type == SemanticTokenType::String));
     }
 
     #[test]
@@ -467,16 +461,12 @@ mod tests {
             pos_end: 10,
         };
         let tokens = generate_semantic_tokens(&val, &SymbolTable::new(), &HashMap::new());
-        assert!(
-            tokens
-                .iter()
-                .any(|t| t.token_type == SemanticTokenType::Enum)
-        );
-        assert!(
-            tokens
-                .iter()
-                .any(|t| t.token_type == SemanticTokenType::Property)
-        );
+        assert!(tokens
+            .iter()
+            .any(|t| t.token_type == SemanticTokenType::Enum));
+        assert!(tokens
+            .iter()
+            .any(|t| t.token_type == SemanticTokenType::Property));
     }
 
     #[test]

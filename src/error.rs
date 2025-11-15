@@ -1,4 +1,5 @@
 use miette::{Diagnostic, NamedSource, SourceSpan};
+use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Error, Debug, Diagnostic, Clone)]
@@ -6,12 +7,24 @@ pub enum MonError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     #[source_code]
-    Parser(#[from] ParserError),
+    Parser(Box<ParserError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
     #[source_code]
-    Resolver(#[from] ResolverError),
+    Resolver(Box<ResolverError>),
+}
+
+impl From<ParserError> for MonError {
+    fn from(err: ParserError) -> Self {
+        MonError::Parser(Box::new(err))
+    }
+}
+
+impl From<ResolverError> for MonError {
+    fn from(err: ResolverError) -> Self {
+        MonError::Resolver(Box::new(err))
+    }
 }
 
 #[derive(Error, Debug, Diagnostic, Clone)]
@@ -24,7 +37,7 @@ pub enum ParserError {
     )]
     UnexpectedToken {
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("Expected {expected}, but found this")]
         span: SourceSpan,
         expected: String,
@@ -37,7 +50,7 @@ pub enum ParserError {
     )]
     UnexpectedEof {
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("File ended unexpectedly here")]
         span: SourceSpan,
     },
@@ -49,7 +62,7 @@ pub enum ParserError {
     )]
     MissingExpectedToken {
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("Expected {expected} here")]
         span: SourceSpan,
         expected: String,
@@ -66,7 +79,7 @@ pub enum ResolverError {
     ModuleNotFound {
         path: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("...referenced here")]
         span: SourceSpan,
     },
@@ -79,7 +92,7 @@ pub enum ResolverError {
     AnchorNotFound {
         name: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("This anchor was not found")]
         span: SourceSpan,
     },
@@ -92,7 +105,7 @@ pub enum ResolverError {
     SpreadOnNonObject {
         name: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("'{name}' does not point to an object")]
         span: SourceSpan,
     },
@@ -105,7 +118,7 @@ pub enum ResolverError {
     SpreadOnNonArray {
         name: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("'{name}' does not point to an array")]
         span: SourceSpan,
     },
@@ -118,7 +131,7 @@ pub enum ResolverError {
     CircularDependency {
         cycle: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("Importing this module creates a cycle")]
         span: SourceSpan,
     },
@@ -129,7 +142,13 @@ pub enum ResolverError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    WrappedParserError(#[from] ParserError),
+    WrappedParserError(Box<ParserError>),
+}
+
+impl From<ParserError> for ResolverError {
+    fn from(err: ParserError) -> Self {
+        ResolverError::WrappedParserError(Box::new(err))
+    }
 }
 
 #[derive(Error, Debug, Diagnostic, Clone)]
@@ -138,14 +157,16 @@ pub enum ValidationError {
     #[error("Type mismatch for field '{field_name}'. Expected type {expected_type} but got {found_type}.")]
     #[diagnostic(
         code(validation::type_mismatch),
-        help("Ensure the value's type matches the expected type in the struct or enum definition.")
+        help(
+            "Ensure the value's type matches the expected type in the struct or enum definition."
+        )
     )]
     TypeMismatch {
         field_name: String,
         expected_type: String,
         found_type: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("Type mismatch here")]
         span: SourceSpan,
     },
@@ -159,7 +180,7 @@ pub enum ValidationError {
         field_name: String,
         struct_name: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("Field '{field_name}' is missing here")]
         span: SourceSpan,
     },
@@ -173,7 +194,7 @@ pub enum ValidationError {
         field_name: String,
         struct_name: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("Unexpected field here")]
         span: SourceSpan,
     },
@@ -186,7 +207,7 @@ pub enum ValidationError {
     UndefinedType {
         type_name: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("Undefined type used here")]
         span: SourceSpan,
     },
@@ -200,7 +221,7 @@ pub enum ValidationError {
         variant_name: String,
         enum_name: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("Undefined enum variant used here")]
         span: SourceSpan,
     },
@@ -213,7 +234,7 @@ pub enum ValidationError {
     UnimplementedCollectionValidation {
         field_name: String,
         #[source_code]
-        src: NamedSource<String>,
+        src: Arc<NamedSource<String>>,
         #[label("Complex collection type here")]
         span: SourceSpan,
     },
@@ -223,7 +244,7 @@ impl From<MonError> for ResolverError {
     fn from(err: MonError) -> Self {
         match err {
             MonError::Parser(p_err) => ResolverError::WrappedParserError(p_err),
-            MonError::Resolver(r_err) => r_err,
+            MonError::Resolver(r_err) => *r_err,
         }
     }
 }

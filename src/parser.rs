@@ -132,7 +132,8 @@ impl<'a> Parser<'a> {
 
         let start_token = self.current_token()?.clone(); // Capture start token for pos_start
 
-        let mut value = match &start_token.ttype.clone() { // Use start_token here
+        let mut value = match &start_token.ttype.clone() {
+            // Use start_token here
             TokenType::LBrace => self.parse_object(),
             TokenType::LBracket => self.parse_array(),
             TokenType::String(s) => {
@@ -392,7 +393,11 @@ impl<'a> Parser<'a> {
 
         Ok(TypeDefinition {
             name,
-            name_span: (name_token.pos_start, name_token.pos_end - name_token.pos_start).into(),
+            name_span: (
+                name_token.pos_start,
+                name_token.pos_end - name_token.pos_start,
+            )
+                .into(),
             def_type,
             pos_start: name_token.pos_start,
             pos_end: end_pos,
@@ -490,7 +495,11 @@ impl<'a> Parser<'a> {
                     let mut type_spec = self.parse_type_spec()?;
                     if self.match_token(TokenType::Spread) {
                         let end_token = self.current_token_before_advance()?.clone();
-                        let span = (type_spec.get_span().offset(), end_token.pos_end - type_spec.get_span().offset()).into();
+                        let span = (
+                            type_spec.get_span().offset(),
+                            end_token.pos_end - type_spec.get_span().offset(),
+                        )
+                            .into();
                         type_spec = TypeSpec::Spread(Box::new(type_spec), span);
                     }
                     types.push(type_spec);
@@ -505,13 +514,21 @@ impl<'a> Parser<'a> {
             }
             let end_token = self.current_token()?.clone();
             self.expect(TokenType::RBracket)?;
-            let span = (start_token.pos_start, end_token.pos_end - start_token.pos_start).into();
+            let span = (
+                start_token.pos_start,
+                end_token.pos_end - start_token.pos_start,
+            )
+                .into();
             Ok(TypeSpec::Collection(types, span))
         } else {
             // Simple Type
             let name = self.parse_key()?;
             let end_token = self.current_token_before_advance()?.clone();
-            let span = (start_token.pos_start, end_token.pos_end - start_token.pos_start).into();
+            let span = (
+                start_token.pos_start,
+                end_token.pos_end - start_token.pos_start,
+            )
+                .into();
             Ok(TypeSpec::Simple(name, span))
         }
     }
@@ -542,7 +559,7 @@ impl<'a> Parser<'a> {
         self.tokens.get(self.position).ok_or_else(|| {
             let pos = self.source_text.len().saturating_sub(1);
             ParserError::UnexpectedEof {
-                src: (*self.source).clone(),
+                src: (*self.source).clone().into(), // ineficiency is my passion
                 span: (pos, 0).into(),
             }
             .into()
@@ -550,14 +567,16 @@ impl<'a> Parser<'a> {
     }
 
     fn current_token_before_advance(&self) -> Result<&Token, MonError> {
-        self.tokens.get(self.position.saturating_sub(1)).ok_or_else(|| {
-            let pos = self.source_text.len().saturating_sub(1);
-            ParserError::UnexpectedEof {
-                src: (*self.source).clone(),
-                span: (pos, 0).into(),
-            }
-            .into()
-        })
+        self.tokens
+            .get(self.position.saturating_sub(1))
+            .ok_or_else(|| {
+                let pos = self.source_text.len().saturating_sub(1);
+                ParserError::UnexpectedEof {
+                    src: (*self.source).clone().into(),
+                    span: (pos, 0).into(),
+                }
+                .into()
+            })
     }
 
     fn advance(&mut self) {
@@ -615,7 +634,7 @@ impl<'a> Parser<'a> {
         let token = self.current_token()?; // Should be safe if we got here
         print!("caller: {}", Location::caller());
         Err(ParserError::UnexpectedToken {
-            src: (*self.source).clone(),
+            src: (*self.source).clone().into(),
             span: (token.pos_start, token.pos_end - token.pos_start).into(),
             expected: expected.to_string(),
         }
@@ -645,7 +664,7 @@ mod tests {
     use std::fs;
 
     fn parse_ok(source: &str) -> MonDocument {
-        let mut parser = Parser::new(source).unwrap();
+        let mut parser = Parser::new_with_name(source, "test.mon".to_string()).unwrap();
         match parser.parse_document() {
             Ok(doc) => doc,
             Err(err) => {
@@ -821,8 +840,34 @@ mod tests {
     #[ignore]
     fn visual_conformation_from_golden() {
         let contents = fs::read_to_string("tests/ok/golden.mon").unwrap();
-        let parsed = Parser::new(&contents).unwrap().parse_document();
+        let parsed = Parser::new_with_name(&contents, "test.mon".to_string())
+            .unwrap()
+            .parse_document();
 
         print!("parsed: \n{}", pretty_result(parsed))
+    }
+
+    #[test]
+    fn test_all_mon_files() {
+        let tests_dir = "./tests";
+        let entries = fs::read_dir(tests_dir).expect("Failed to read tests directory");
+
+        for entry in entries {
+            let entry = entry.expect("Failed to read directory entry");
+            let path = entry.path();
+
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "mon") {
+                println!("Parsing file: {:?}", path);
+                let source = fs::read_to_string(&path)
+                    .unwrap_or_else(|_| panic!("Failed to read file: {:?}", path));
+
+                let mut parser = Parser::new_with_name(&source, path.to_str().unwrap().to_string())
+                    .expect("Lexer failed");
+
+                if let Err(err) = parser.parse_document() {
+                    panic!("Failed to parse {:?}. Error: {:#?}", path, Report::new(err));
+                }
+            }
+        }
     }
 }

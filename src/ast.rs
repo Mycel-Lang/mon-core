@@ -3,12 +3,15 @@ use miette::SourceSpan;
 use std::fmt::{Debug, Display};
 use std::panic::Location;
 
+/// Represents a fully parsed MON document, including the root value and any import statements.
 #[derive(Debug, PartialEq, Clone)]
 pub struct MonDocument {
     pub root: MonValue,
     pub imports: Vec<ImportStatement>,
 }
 
+/// Represents a value in a MON document, such as a `string`, `number`, `object`, or `array`...
+/// It also includes metadata like its source position and any associated anchor.
 #[derive(Debug, PartialEq, Clone)]
 pub struct MonValue {
     pub kind: MonValueKind,
@@ -18,78 +21,121 @@ pub struct MonValue {
 }
 
 impl MonValue {
+    /// Returns the source span of the value, which can be used for error reporting.
     pub fn get_source_span(&self) -> SourceSpan {
         SourceSpan::new(self.pos_start.into(), self.pos_end - self.pos_start)
     }
 }
 
+/// An enum representing the different kinds of values that can exist in a MON document.
 #[derive(Debug, PartialEq, Clone)]
 pub enum MonValueKind {
+    /// A string literal.
     String(String),
+    /// A floating-point number.
     Number(f64),
+    /// A boolean value.
     Boolean(bool),
+    /// A null value.
     Null,
+    /// An object, containing a vector of `Member`s.
     Object(Vec<Member>),
+    /// An array, containing a vector of `MonValue`s.
     Array(Vec<MonValue>),
+    /// An alias to an anchored value.
     Alias(String),
+    /// An enum variant.
     EnumValue {
         enum_name: String,
         variant_name: String,
     },
+    /// A spread of an array.
     ArraySpread(String),
 }
 
+/// Represents a member of a MON object.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Member {
+    /// A key-value pair.
     Pair(Pair),
+    /// A spread of another object's members.
     Spread(String),
+    /// An import statement.
     Import(ImportStatement),
+    /// A type definition (`#struct` or `#enum`).
     TypeDefinition(TypeDefinition),
 }
 
+/// Represents a key-value pair within a MON object.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Pair {
+    /// The key of the pair.
     pub key: String,
+    /// The value of the pair.
     pub value: MonValue,
+    /// An optional type specification used for validation, e.g., `key::String`.
+    ///
+    /// [NOTE] This is lazily generated, check if it exists first
     pub validation: Option<TypeSpec>,
 }
 
+/// Represents an `import` statement, e.g., `import "path/to/file.mon" as my_namespace;`
 #[derive(Debug, PartialEq, Clone)]
 pub struct ImportStatement {
+    /// The file path to the imported file.
     pub path: String,
+    /// The specification of what to import (either a namespace or a list of named items).
     pub spec: ImportSpec,
+    /// The starting character position of this statement in the source text.
     pub pos_start: usize,
+    /// The ending character position of this statement in the source text.
     pub pos_end: usize,
 }
 
+/// Defines what is being imported from a file.
 #[derive(Debug, PartialEq, Clone)]
 pub enum ImportSpec {
+    /// Imports the entire file into a single namespace, e.g., `as my_namespace`.
     Namespace(String),
+    /// Imports specific items (anchors or types) from the file, e.g., `{ MyType, &my_anchor }`.
     Named(Vec<ImportSpecifier>),
 }
 
+/// Represents a single item being imported by name.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ImportSpecifier {
+    /// The name of the type or anchor to import.
     pub name: String,
+    /// Whether the imported item is an anchor (e.g., `&my_anchor`).
     pub is_anchor: bool,
 }
 
+/// Represents a type definition, either a `#struct` or an `#enum`.
 #[derive(Debug, PartialEq, Clone)]
 pub struct TypeDefinition {
+    /// The name of the type being defined.
     pub name: String,
+    /// The source span of the type's name.
     pub name_span: SourceSpan,
+    /// The actual definition of the type.
     pub def_type: TypeDef,
+    /// The starting character position of this definition in the source text.
     pub pos_start: usize,
+    /// The ending character position of this definition in the source text.
     pub pos_end: usize,
 }
 
+/// An enum that holds either a struct or an enum definition.
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypeDef {
+    /// A struct definition.
     Struct(StructDef),
+    /// An enum definition.
     Enum(EnumDef),
 }
 
 impl TypeDef {
+    /// Returns the source span of the entire type definition.
     pub fn get_span(&self) -> SourceSpan {
         match self {
             TypeDef::Struct(s) => (s.pos_start, s.pos_end - s.pos_start).into(),
@@ -98,32 +144,47 @@ impl TypeDef {
     }
 }
 
+/// Represents a `#struct` definition.
 #[derive(Debug, PartialEq, Clone)]
 pub struct StructDef {
+    /// The fields that make up the struct.
     pub fields: Vec<FieldDef>,
+    /// The starting character position of this struct definition in the source text.
     pub pos_start: usize,
+    /// The ending character position of this struct definition in the source text.
     pub pos_end: usize,
 }
 
+/// Represents a single field within a `#struct` definition.
 #[derive(Debug, PartialEq, Clone)]
 pub struct FieldDef {
+    /// The name of the field.
     pub name: String,
+    /// The type specification for this field.
     pub type_spec: TypeSpec,
+    /// An optional default value for this field.
     pub default_value: Option<MonValue>,
 }
 
+/// Represents an `#enum` definition.
 #[derive(Debug, PartialEq, Clone)]
 pub struct EnumDef {
+    /// The variants of the enum.
     pub variants: Vec<String>,
+    /// The starting character position of this enum definition in the source text.
     pub pos_start: usize,
+    /// The ending character position of this enum definition in the source text.
     pub pos_end: usize,
 }
 
-// Represents a type specification, e.g., `String`, `[Number...]`
+/// Represents a type specification used for validation, e.g., `:: String` or `:: [Number, String]`.
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypeSpec {
+    /// A simple type, e.g., `String`, `MyStruct`.
     Simple(String, SourceSpan),
+    /// A collection type, e.g., `[Number, String]`.
     Collection(Vec<TypeSpec>, SourceSpan),
+    /// A spread type within a collection, e.g., `[Number...]`.
     Spread(Box<TypeSpec>, SourceSpan),
 }
 
@@ -148,12 +209,15 @@ impl Display for Member {
     }
 }
 
+/// A table to store resolved symbols, such as type definitions, from a MON document and its imports.
 #[derive(Debug, Default)]
 pub struct SymbolTable {
+    /// A map of type names to their definitions.
     pub types: std::collections::HashMap<String, TypeDefinition>,
 }
 
 impl SymbolTable {
+    /// Creates a new, empty symbol table.
     pub fn new() -> Self {
         Self::default()
     }
@@ -232,4 +296,3 @@ impl Pair {
         }
     }
 }
-

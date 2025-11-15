@@ -1,6 +1,8 @@
+#[cfg(feature = "lsp")]
 /// Calculates the 1-based line and column number for a given byte position in the source text.
 /// This function is designed to be called only when an error occurs, as it iterates through
 /// the source text to determine the position.
+#[allow(dead_code)]
 pub fn get_line_and_column(source: &str, position: usize) -> (usize, usize) {
     let mut line = 1;
     let mut column = 1;

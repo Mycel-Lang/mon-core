@@ -1,4 +1,11 @@
+> MYCEL / MON is a hobby project. 
+
 # MON (Mycel Object Notation) Core
+
+[![Crates.io](https://img.shields.io/crates/v/mon-core.svg)](https://crates.io/crates/mon-core)
+[![Docs.rs](https://docs.rs/mon-core/badge.svg)](https://docs.rs/mon-core)
+[![License](https://img.shields.io/crates/l/mon-core.svg)](LICENSE)
+[![CI](https://github.com/mycel-dot-org/mon/actions/workflows/rust.yml/badge.svg)](https://github.com/mycel-dot-org/mon/actions/workflows/rust.yml)
 
 `mon-core` is the foundational Rust implementation for **MON (Mycel Object Notation)**, a human-friendly data notation
 language designed for configuration, data exchange, and more. It prioritizes readability, structure, and reusability.
@@ -20,6 +27,39 @@ language designed for configuration, data exchange, and more. It prioritizes rea
       references.
 * **Rich Error Reporting:** Utilizes `miette` for clear, graphical diagnostics with source code snippets for parsing,
   resolution, and validation errors.
+
+## Usage
+
+To use `mon-core`, add it to your `Cargo.toml`:
+
+```toml
+[dependencies]
+mon-core = "0.1.0" # Replace with the latest version
+```
+
+For a quick start, check out the [example](examples/simple.rs) in the `examples/` directory.
+
+```rust
+// examples/simple.rs
+use mon_core::analyze;
+
+    let mon_data = r#"
+        user: {
+            name: "John Doe",
+            email: "john.doe@example.com"
+        }
+    "#;
+
+    match analyze(mon_data, "example.mon") {
+        Ok(result) => {
+            let json_output = result.to_json().unwrap();
+            println!("Successfully parsed MON to JSON:\n{}", json_output);
+        }
+        Err(e) => {
+            eprintln!("Failed to parse MON: {:?}", e);
+        }
+    }
+```
 
 ## Project Architecture (High-Level)
 
@@ -53,6 +93,11 @@ This is a standard Rust library project.
   ```bash
   cargo check
   ```
+
+## Contributing
+
+We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute,
+report bugs, and suggest features. Adherence to our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) is expected.
 
 ## Development Conventions
 

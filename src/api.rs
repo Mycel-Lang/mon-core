@@ -1,9 +1,14 @@
-use crate::ast::{Member, MonDocument, MonValue, MonValueKind, SymbolTable, TypeSpec};
+use crate::ast::{MonDocument, MonValue, SymbolTable, TypeSpec};
 use crate::error::MonError;
+
+#[cfg(feature = "lsp")]
+use crate::ast::{Member, MonValueKind};
+#[cfg(feature = "lsp")]
 use crate::lsp;
 use crate::parser::Parser;
 use crate::resolver::Resolver;
 use crate::serialization::{to_value, Value};
+#[cfg(feature = "lsp")]
 use miette::SourceSpan;
 use serde::{Serialize, Serializer};
 use serde_json;
@@ -49,6 +54,7 @@ impl AnalysisResult {
         serde_yaml::to_string(&self)
     }
 
+    #[cfg(feature = "lsp")]
     /// Finds the definition of the symbol at the given character position.
     /// This is the core of "go to definition".
     pub fn get_definition_at(&self, position: usize) -> Option<SourceSpan> {
@@ -72,6 +78,7 @@ impl AnalysisResult {
         }
     }
 
+    #[cfg(feature = "lsp")]
     /// Gets information about the type of the symbol at the given character position.
     /// This is the core of "hover" tooltips.
     pub fn get_type_info_at(&self, position: usize) -> Option<String> {
@@ -86,6 +93,7 @@ impl AnalysisResult {
             lsp::FoundNode::TypeSpec(type_spec) => Some(type_spec.to_string()),
         }
     }
+    #[cfg(feature = "lsp")]
     /// Finds all references to the symbol at the given character position.
     pub fn find_references(&self, position: usize) -> Option<Vec<SourceSpan>> {
         let symbol_info = lsp::find_symbol_at(&self.unresolved_document.root, position)?;
@@ -115,14 +123,16 @@ impl AnalysisResult {
     }
 }
 
+#[cfg(feature = "lsp")]
 #[derive(Debug, Clone, Copy)]
 enum FoundNode<'a> {
     Value(&'a MonValue),
     TypeSpec(&'a TypeSpec),
 }
 
+#[cfg(feature = "lsp")]
 /// Finds the most specific AST node that contains the given character position.
-fn find_node_at<'a>(value: &'a MonValue, position: usize) -> Option<FoundNode<'a>> {
+fn find_node_at(value: &MonValue, position: usize) -> Option<FoundNode<'_>> {
     if position < value.pos_start || position >= value.pos_end {
         return None;
     }
@@ -153,10 +163,8 @@ fn find_node_at<'a>(value: &'a MonValue, position: usize) -> Option<FoundNode<'a
     Some(FoundNode::Value(value))
 }
 
-fn find_node_in_type_spec<'a>(
-    type_spec: &'a TypeSpec,
-    position: usize,
-) -> Option<FoundNode<'a>> {
+#[cfg(feature = "lsp")]
+fn find_node_in_type_spec(type_spec: &TypeSpec, position: usize) -> Option<FoundNode<'_>> {
     let span = type_spec.get_span();
     if position < span.offset() || position >= span.offset() + span.len() {
         return None;
@@ -173,6 +181,20 @@ fn find_node_in_type_spec<'a>(
     Some(FoundNode::TypeSpec(type_spec))
 }
 
+/// Analyzes a MON source string, parsing, resolving, and validating it.
+///
+/// This is the primary entry point for processing MON data. It returns an
+/// `AnalysisResult` on success, which contains the fully resolved document
+/// and provides methods for serialization and LSP-related queries.
+///
+/// # Arguments
+///
+/// * `source` - The MON source code as a string.
+/// * `file_name` - The name of the file being analyzed (used for error reporting).
+///
+/// # Errors
+///
+/// Returns a `MonError` if parsing, resolution, or validation fails.
 pub fn analyze(source: &str, file_name: &str) -> Result<AnalysisResult, MonError> {
     let mut parser = Parser::new_with_name(source, file_name.to_string())?;
     let document = parser.parse_document()?;
@@ -212,4 +234,3 @@ impl Display for TypeSpec {
         }
     }
 }
-

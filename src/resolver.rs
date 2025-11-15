@@ -12,7 +12,7 @@ pub struct Resolver {
     // Stores resolved documents by their absolute path
     resolved_documents: HashMap<PathBuf, MonDocument>,
     // Stack to detect circular dependencies during import resolution
-    resolving_stack: Vec<(PathBuf, Option<ImportStatement>)>, 
+    resolving_stack: Vec<(PathBuf, Option<ImportStatement>)>,
     // Global symbol table for types
     pub symbol_table: AstSymbolTable,
     // Global map for anchors
@@ -48,10 +48,7 @@ impl Resolver {
                 .join(" -> ");
             return Err(ResolverError::CircularDependency {
                 cycle: format!("{} -> {}", cycle_str, file_path.to_string_lossy()),
-                src: NamedSource::new(
-                    file_path.to_string_lossy().to_string(),
-                    source_text.to_string(),
-                ),
+                src: NamedSource::new(file_path.to_string_lossy(), source_text.to_string()).into(),
                 span: (
                     existing_causing_import.pos_start,
                     existing_causing_import.pos_end - existing_causing_import.pos_start,
@@ -83,10 +80,10 @@ impl Resolver {
                 std::fs::read_to_string(&absolute_imported_path).map_err(|_| {
                     ResolverError::ModuleNotFound {
                         path: imported_path_str.to_string(),
-                        src: NamedSource::new(
-                            file_path.to_string_lossy().to_string(),
+                        src: Arc::from(NamedSource::new(
+                            file_path.to_string_lossy(),
                             source_arc.to_string(),
-                        ),
+                        )),
                         span: (
                             import_statement.pos_start,
                             import_statement.pos_end - import_statement.pos_start,
@@ -193,10 +190,10 @@ impl Resolver {
                     // TODO: Get actual span for the alias
                     ResolverError::AnchorNotFound {
                         name: alias_name.clone(),
-                        src: NamedSource::new(
-                            file_path.to_string_lossy().to_string(),
+                        src: Arc::from(NamedSource::new(
+                            file_path.to_string_lossy(),
                             source_text.to_string(),
-                        ),
+                        )),
                         span: alias_span,
                     }
                 })?;
@@ -212,10 +209,10 @@ impl Resolver {
                                 // TODO: Get actual span for the spread
                                 ResolverError::AnchorNotFound {
                                     name: spread_name.clone(),
-                                    src: NamedSource::new(
-                                        file_path.to_string_lossy().to_string(),
+                                    src: Arc::from(NamedSource::new(
+                                        file_path.to_string_lossy(),
                                         source_text.to_string(),
-                                    ),
+                                    )),
                                     span: alias_span,
                                 }
                             })?;
@@ -232,10 +229,10 @@ impl Resolver {
                             } else {
                                 return Err(ResolverError::SpreadOnNonObject {
                                     name: spread_name.clone(),
-                                    src: NamedSource::new(
-                                        file_path.to_string_lossy().to_string(),
+                                    src: Arc::from(NamedSource::new(
+                                        file_path.to_string_lossy(),
                                         source_text.to_string(),
-                                    ),
+                                    )),
                                     span: alias_span,
                                 });
                             }
@@ -258,7 +255,8 @@ impl Resolver {
                     } else {
                         // Non-pair members (like TypeDefinition) are just added
                         // This might need refinement depending on how TypeDefinitions are handled after resolution
-                        final_members_map.insert(format!("{:?}", member), member); // Dummy key for now
+                        final_members_map.insert(format!("{:?}", member), member);
+                        // Dummy key for now
                     }
                 }
                 let final_members = final_members_map.into_values().collect();
@@ -279,11 +277,11 @@ impl Resolver {
                                 // TODO: Get actual span for the spread
                                 ResolverError::AnchorNotFound {
                                     name: spread_name.clone(),
-                                    src: NamedSource::new(
-                                        file_path.to_string_lossy().to_string(),
+                                    src: Arc::from(NamedSource::new(
+                                        file_path.to_string_lossy(),
                                         source_text.to_string(),
-                                    ),
-                                    span: alias_span.into(),
+                                    )),
+                                    span: alias_span,
                                 }
                             })?;
                             if let MonValueKind::Array(spread_elements) = &anchor_value.kind {
@@ -300,10 +298,10 @@ impl Resolver {
                                 // TODO: Get actual span for the spread
                                 return Err(ResolverError::SpreadOnNonArray {
                                     name: spread_name.clone(),
-                                    src: NamedSource::new(
-                                        file_path.to_string_lossy().to_string(),
+                                    src: Arc::from(NamedSource::new(
+                                        file_path.to_string_lossy(),
                                         source_text.to_string(),
-                                    ),
+                                    )),
                                     span: alias_span,
                                 });
                             }
@@ -393,10 +391,10 @@ impl Resolver {
                                 field_name: field_name.to_string(),
                                 expected_type: "String".to_string(),
                                 found_type: format!("{:?}", value.kind),
-                                src: NamedSource::new(
-                                    file_path.to_string_lossy().to_string(),
+                                src: Arc::from(NamedSource::new(
+                                    file_path.to_string_lossy(),
                                     source_text.to_string(),
-                                ),
+                                )),
                                 span: (value.pos_start, value.pos_end - value.pos_start).into(),
                             }));
                         }
@@ -407,10 +405,10 @@ impl Resolver {
                                 field_name: field_name.to_string(),
                                 expected_type: "Number".to_string(),
                                 found_type: format!("{:?}", value.kind),
-                                src: NamedSource::new(
-                                    file_path.to_string_lossy().to_string(),
+                                src: Arc::from(NamedSource::new(
+                                    file_path.to_string_lossy(),
                                     source_text.to_string(),
-                                ),
+                                )),
                                 span: (value.pos_start, value.pos_end - value.pos_start).into(),
                             }));
                         }
@@ -421,10 +419,10 @@ impl Resolver {
                                 field_name: field_name.to_string(),
                                 expected_type: "Boolean".to_string(),
                                 found_type: format!("{:?}", value.kind),
-                                src: NamedSource::new(
-                                    file_path.to_string_lossy().to_string(),
+                                src: Arc::from(NamedSource::new(
+                                    file_path.to_string_lossy(),
                                     source_text.to_string(),
-                                ),
+                                )),
                                 span: (value.pos_start, value.pos_end - value.pos_start).into(),
                             }));
                         }
@@ -435,10 +433,10 @@ impl Resolver {
                                 field_name: field_name.to_string(),
                                 expected_type: "Null".to_string(),
                                 found_type: format!("{:?}", value.kind),
-                                src: NamedSource::new(
-                                    file_path.to_string_lossy().to_string(),
+                                src: Arc::from(NamedSource::new(
+                                    file_path.to_string_lossy(),
                                     source_text.to_string(),
-                                ),
+                                )),
                                 span: (value.pos_start, value.pos_end - value.pos_start).into(),
                             }));
                         }
@@ -449,10 +447,10 @@ impl Resolver {
                                 field_name: field_name.to_string(),
                                 expected_type: "Object".to_string(),
                                 found_type: format!("{:?}", value.kind),
-                                src: NamedSource::new(
-                                    file_path.to_string_lossy().to_string(),
+                                src: Arc::from(NamedSource::new(
+                                    file_path.to_string_lossy(),
                                     source_text.to_string(),
-                                ),
+                                )),
                                 span: (value.pos_start, value.pos_end - value.pos_start).into(),
                             }));
                         }
@@ -463,10 +461,10 @@ impl Resolver {
                                 field_name: field_name.to_string(),
                                 expected_type: "Array".to_string(),
                                 found_type: format!("{:?}", value.kind),
-                                src: NamedSource::new(
-                                    file_path.to_string_lossy().to_string(),
+                                src: Arc::from(NamedSource::new(
+                                    file_path.to_string_lossy(),
                                     source_text.to_string(),
-                                ),
+                                )),
                                 span: (value.pos_start, value.pos_end - value.pos_start).into(),
                             }));
                         }
@@ -495,10 +493,10 @@ impl Resolver {
                                 .ok_or_else(|| {
                                     ResolverError::Validation(ValidationError::UndefinedType {
                                         type_name: type_name.to_string(),
-                                        src: NamedSource::new(
-                                            file_path.to_string_lossy().to_string(),
+                                        src: Arc::from(NamedSource::new(
+                                            file_path.to_string_lossy(),
                                             source_text.to_string(),
-                                        ),
+                                        )),
                                         span: (value.pos_start, value.pos_end - value.pos_start)
                                             .into(),
                                     })
@@ -510,10 +508,10 @@ impl Resolver {
                                 // It means the file path is something like "/" or "C:\"
                                 ResolverError::ModuleNotFound {
                                     path: import_statement.path.clone(),
-                                    src: NamedSource::new(
-                                        file_path.to_string_lossy().to_string(),
+                                    src: Arc::from(NamedSource::new(
+                                        file_path.to_string_lossy(),
                                         source_text.to_string(),
-                                    ),
+                                    )),
                                     span: (
                                         import_statement.pos_start,
                                         import_statement.pos_end - import_statement.pos_start,
@@ -531,10 +529,10 @@ impl Resolver {
                                     // should have been resolved and stored during the initial import pass.
                                     ResolverError::ModuleNotFound {
                                         path: absolute_imported_path.to_string_lossy().to_string(),
-                                        src: NamedSource::new(
-                                            file_path.to_string_lossy().to_string(),
+                                        src: Arc::from(NamedSource::new(
+                                            file_path.to_string_lossy(),
                                             source_text.to_string(),
-                                        ),
+                                        )),
                                         span: (value.pos_start, value.pos_end - value.pos_start)
                                             .into(),
                                     }
@@ -553,7 +551,10 @@ impl Resolver {
                                 None
                             }
                         } else {
-                            self.symbol_table.types.get(type_name_part).map(|td| td.def_type.clone())
+                            self.symbol_table
+                                .types
+                                .get(type_name_part)
+                                .map(|td| td.def_type.clone())
                         };
 
                         if let Some(type_def) = type_def {
@@ -590,12 +591,10 @@ impl Resolver {
                                                         ValidationError::MissingField {
                                                             field_name: field_def.name.clone(),
                                                             struct_name: type_name.to_string(),
-                                                            src: NamedSource::new(
-                                                                file_path
-                                                                    .to_string_lossy()
-                                                                    .to_string(),
+                                                            src: Arc::from(NamedSource::new(
+                                                                file_path.to_string_lossy(),
                                                                 source_text.to_string(),
-                                                            ),
+                                                            )),
                                                             span: (
                                                                 value.pos_start,
                                                                 value.pos_end - value.pos_start,
@@ -634,12 +633,10 @@ impl Resolver {
                                                         ValidationError::UnexpectedField {
                                                             field_name: pair.key.clone(),
                                                             struct_name: type_name.to_string(),
-                                                            src: NamedSource::new(
-                                                                file_path
-                                                                    .to_string_lossy()
-                                                                    .to_string(),
+                                                            src: Arc::from(NamedSource::new(
+                                                                file_path.to_string_lossy(),
                                                                 source_text.to_string(),
-                                                            ),
+                                                            )),
                                                             span: (
                                                                 value.pos_start,
                                                                 value.pos_end - value.pos_start,
@@ -656,10 +653,10 @@ impl Resolver {
                                                 field_name: field_name.to_string(),
                                                 expected_type: type_name.to_string(),
                                                 found_type: format!("{:?}", value.kind),
-                                                src: NamedSource::new(
-                                                    file_path.to_string_lossy().to_string(),
+                                                src: Arc::from(NamedSource::new(
+                                                    file_path.to_string_lossy(),
                                                     source_text.to_string(),
-                                                ),
+                                                )),
                                                 span: (
                                                     value.pos_start,
                                                     value.pos_end - value.pos_start,
@@ -682,10 +679,10 @@ impl Resolver {
                                                     field_name: field_name.to_string(),
                                                     expected_type: format!("enum '{}'", type_name),
                                                     found_type: format!("enum '{}'", enum_name),
-                                                    src: NamedSource::new(
-                                                        file_path.to_string_lossy().to_string(),
+                                                    src: Arc::from(NamedSource::new(
+                                                        file_path.to_string_lossy(),
                                                         source_text.to_string(),
-                                                    ),
+                                                    )),
                                                     span: (
                                                         value.pos_start,
                                                         value.pos_end - value.pos_start,
@@ -699,10 +696,10 @@ impl Resolver {
                                                 ValidationError::UndefinedEnumVariant {
                                                     variant_name: variant_name.clone(),
                                                     enum_name: type_name.to_string(),
-                                                    src: NamedSource::new(
-                                                        file_path.to_string_lossy().to_string(),
+                                                    src: Arc::from(NamedSource::new(
+                                                        file_path.to_string_lossy(),
                                                         source_text.to_string(),
-                                                    ),
+                                                    )),
                                                     span: (
                                                         value.pos_start,
                                                         value.pos_end - value.pos_start,
@@ -717,10 +714,10 @@ impl Resolver {
                                                 field_name: field_name.to_string(),
                                                 expected_type: format!("enum '{}'", type_name),
                                                 found_type: format!("{:?}", value.kind),
-                                                src: NamedSource::new(
-                                                    file_path.to_string_lossy().to_string(),
+                                                src: Arc::from(NamedSource::new(
+                                                    file_path.to_string_lossy(),
                                                     source_text.to_string(),
-                                                ),
+                                                )),
                                                 span: (
                                                     value.pos_start,
                                                     value.pos_end - value.pos_start,
@@ -735,10 +732,10 @@ impl Resolver {
                             return Err(ResolverError::Validation(
                                 ValidationError::UndefinedType {
                                     type_name: type_name.to_string(),
-                                    src: NamedSource::new(
-                                        file_path.to_string_lossy().to_string(),
+                                    src: Arc::from(NamedSource::new(
+                                        file_path.to_string_lossy(),
                                         source_text.to_string(),
-                                    ),
+                                    )),
                                     span: (value.pos_start, value.pos_end - value.pos_start).into(),
                                 },
                             ));
@@ -762,10 +759,10 @@ impl Resolver {
                         field_name: field_name.to_string(),
                         expected_type: "Array".to_string(),
                         found_type: format!("{:?}", value.kind),
-                        src: NamedSource::new(
-                            file_path.to_string_lossy().to_string(),
+                        src: Arc::from(NamedSource::new(
+                            file_path.to_string_lossy(),
                             source_text.to_string(),
-                        ),
+                        )),
                         span: (value.pos_start, value.pos_end - value.pos_start).into(),
                     }));
                 }
@@ -775,7 +772,7 @@ impl Resolver {
                 return Ok(());
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     fn validate_collection(
@@ -828,10 +825,10 @@ impl Resolver {
                     field_name: field_name.to_string(),
                     expected_type: format!("tuple with {} elements", collection_types.len()),
                     found_type: format!("tuple with {} elements", elements.len()),
-                    src: NamedSource::new(
-                        file_path.to_string_lossy().to_string(),
+                    src: Arc::from(NamedSource::new(
+                        file_path.to_string_lossy(),
                         source_text.to_string(),
-                    ),
+                    )),
                     span: (
                         elements.first().map_or(0, |e| e.pos_start),
                         elements.last().map_or(0, |e| e.pos_end)
@@ -861,12 +858,12 @@ impl Resolver {
             if elements.is_empty() {
                 return Err(ResolverError::Validation(ValidationError::TypeMismatch {
                     field_name: field_name.to_string(),
-                    expected_type: format!("array with at least 1 element"),
-                    found_type: format!("empty array"),
-                    src: NamedSource::new(
-                        file_path.to_string_lossy().to_string(),
+                    expected_type: "array with at least 1 element".to_string(),
+                    found_type: "empty array".to_string(),
+                    src: Arc::from(NamedSource::new(
+                        file_path.to_string_lossy(),
                         source_text.to_string(),
-                    ),
+                    )),
                     span: (
                         elements.first().map_or(0, |e| e.pos_start),
                         elements.last().map_or(0, |e| e.pos_end)
@@ -906,12 +903,12 @@ impl Resolver {
             if elements.is_empty() {
                 return Err(ResolverError::Validation(ValidationError::TypeMismatch {
                     field_name: field_name.to_string(),
-                    expected_type: format!("array with at least 1 element"),
-                    found_type: format!("empty array"),
-                    src: NamedSource::new(
-                        file_path.to_string_lossy().to_string(),
+                    expected_type: "array with at least 1 element".to_string(),
+                    found_type: "empty array".to_string(),
+                    src: Arc::from(NamedSource::new(
+                        file_path.to_string_lossy(),
                         source_text.to_string(),
-                    ),
+                    )),
                     span: (
                         elements.first().map_or(0, |e| e.pos_start),
                         elements.last().map_or(0, |e| e.pos_end)
@@ -945,13 +942,13 @@ impl Resolver {
         }
 
         // If none of the specific cases match, it's an unimplemented complex collection type
-        return Err(ResolverError::Validation(
+        Err(ResolverError::Validation(
             ValidationError::UnimplementedCollectionValidation {
                 field_name: field_name.to_string(),
-                src: NamedSource::new(
-                    file_path.to_string_lossy().to_string(),
+                src: Arc::from(NamedSource::new(
+                    file_path.to_string_lossy(),
                     source_text.to_string(),
-                ),
+                )),
                 span: (
                     elements.first().map_or(0, |e| e.pos_start),
                     elements.last().map_or(0, |e| e.pos_end)
@@ -959,6 +956,624 @@ impl Resolver {
                 )
                     .into(),
             },
-        ));
+        ))
+    }
+}
+
+impl Default for Resolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::Parser;
+    use crate::resolver::Resolver;
+    use miette::Report;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn resolve_ok(source: &str, file_name: &str) -> crate::ast::MonDocument {
+        let mut parser = Parser::new_with_name(source, file_name.to_string()).unwrap();
+        let document = parser.parse_document().unwrap();
+        let mut resolver = Resolver::new();
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push(file_name);
+        match resolver.resolve(document, source, path, None) {
+            Ok(doc) => doc,
+            Err(err) => {
+                let report = Report::from(err);
+                panic!("{:#}", report);
+            }
+        }
+    }
+
+    fn resolve_err(source: &str, file_name: &str) -> crate::error::ResolverError {
+        let mut parser = Parser::new_with_name(source, file_name.to_string()).unwrap();
+        let document = parser.parse_document().unwrap();
+        let mut resolver = Resolver::new();
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push(file_name);
+        match resolver.resolve(document, source, path, None) {
+            Ok(_) => panic!("Expected a ResolverError, but got Ok"),
+            Err(err) => err,
+        }
+    }
+
+    #[test]
+    fn test_simple_alias_resolution() {
+        let source = r#"{ &my_value: 123, alias_value: *my_value }"#;
+        let doc = resolve_ok(source, "test.mon");
+
+        let root_object = match doc.root.kind {
+            crate::ast::MonValueKind::Object(members) => members,
+            _ => panic!("Expected an object"),
+        };
+
+        // Check that the alias_value is resolved to 123
+        let alias_member = root_object
+            .iter()
+            .find(|m| {
+                if let crate::ast::Member::Pair(p) = m {
+                    p.key == "alias_value"
+                } else {
+                    false
+                }
+            })
+            .unwrap();
+
+        if let crate::ast::Member::Pair(p) = alias_member {
+            assert_eq!(p.value.kind, crate::ast::MonValueKind::Number(123.0));
+        } else {
+            panic!("Expected a pair member");
+        }
+    }
+
+    #[test]
+    fn test_object_spread_resolution() {
+        let source = r#"{
+        &base_config: { host: "localhost", port: 8080 },
+        app_config: {
+            ...*base_config,
+            port: 9000, // Override
+            debug: true,
+        }
+    }"#;
+        let doc = resolve_ok(source, "test.mon");
+
+        let root_object = match doc.root.kind {
+            crate::ast::MonValueKind::Object(members) => members,
+            _ => panic!("Expected an object"),
+        };
+
+        let app_config_member = root_object
+            .iter()
+            .find(|m| {
+                if let crate::ast::Member::Pair(p) = m {
+                    p.key == "app_config"
+                } else {
+                    false
+                }
+            })
+            .unwrap();
+
+        if let crate::ast::Member::Pair(p) = app_config_member {
+            let app_config_object = match &p.value.kind {
+                crate::ast::MonValueKind::Object(members) => members,
+                _ => panic!("Expected app_config to be an object"),
+            };
+
+            // Check host
+            let host_member = app_config_object
+                .iter()
+                .find(|m| {
+                    if let crate::ast::Member::Pair(p) = m {
+                        p.key == "host"
+                    } else {
+                        false
+                    }
+                })
+                .unwrap();
+            if let crate::ast::Member::Pair(p) = host_member {
+                assert_eq!(
+                    p.value.kind,
+                    crate::ast::MonValueKind::String("localhost".to_string())
+                );
+            } else {
+                panic!("Expected host to be a pair");
+            }
+
+            // Check port (overridden)
+            let port_member = app_config_object
+                .iter()
+                .find(|m| {
+                    if let crate::ast::Member::Pair(p) = m {
+                        p.key == "port"
+                    } else {
+                        false
+                    }
+                })
+                .unwrap();
+            if let crate::ast::Member::Pair(p) = port_member {
+                assert_eq!(p.value.kind, crate::ast::MonValueKind::Number(9000.0));
+            } else {
+                panic!("Expected port to be a pair");
+            }
+
+            // Check debug (new field)
+            let debug_member = app_config_object
+                .iter()
+                .find(|m| {
+                    if let crate::ast::Member::Pair(p) = m {
+                        p.key == "debug"
+                    } else {
+                        false
+                    }
+                })
+                .unwrap();
+            if let crate::ast::Member::Pair(p) = debug_member {
+                assert_eq!(p.value.kind, crate::ast::MonValueKind::Boolean(true));
+            } else {
+                panic!("Expected debug to be a pair");
+            }
+        } else {
+            panic!("Expected app_config to be a pair member");
+        }
+    }
+
+    #[test]
+    fn test_array_spread_resolution() {
+        let source = r#"{
+        &base_tags: ["tag1", "tag2"],
+        item_tags: [
+            "start",
+            ...*base_tags,
+            "end",
+        ]
+    }"#;
+        let doc = resolve_ok(source, "test.mon");
+
+        let root_object = match doc.root.kind {
+            crate::ast::MonValueKind::Object(members) => members,
+            _ => panic!("Expected an object"),
+        };
+
+        let item_tags_member = root_object
+            .iter()
+            .find(|m| {
+                if let crate::ast::Member::Pair(p) = m {
+                    p.key == "item_tags"
+                } else {
+                    false
+                }
+            })
+            .unwrap();
+
+        if let crate::ast::Member::Pair(p) = item_tags_member {
+            let item_tags_array = match &p.value.kind {
+                crate::ast::MonValueKind::Array(elements) => elements,
+                _ => panic!("Expected item_tags to be an array"),
+            };
+
+            assert_eq!(item_tags_array.len(), 4);
+            assert_eq!(
+                item_tags_array[0].kind,
+                crate::ast::MonValueKind::String("start".to_string())
+            );
+            assert_eq!(
+                item_tags_array[1].kind,
+                crate::ast::MonValueKind::String("tag1".to_string())
+            );
+            assert_eq!(
+                item_tags_array[2].kind,
+                crate::ast::MonValueKind::String("tag2".to_string())
+            );
+            assert_eq!(
+                item_tags_array[3].kind,
+                crate::ast::MonValueKind::String("end".to_string())
+            );
+        } else {
+            panic!("Expected item_tags to be a pair member");
+        }
+    }
+
+    #[test]
+    fn test_struct_validation_with_defaults_and_collections_ok() {
+        let source = r#"
+        {
+            User: #struct {
+                id(Number),
+                name(String),
+                email(String) = "default@example.com",
+                is_active(Boolean) = true,
+                roles([String...]),
+                permissions([String, Number]),
+                log_data([String, Any...]),
+                status_history([Boolean..., String]),
+            },
+
+            // Valid user with defaults
+            user1 :: User = {
+                id: 1,
+                name: "Alice",
+                roles: ["admin", "editor"],
+                permissions: ["read", 1],
+                log_data: ["login", { timestamp: "...", ip: "..." }],
+                status_history: [true, false, "active"],
+            },
+
+            // Valid user, omitting optional fields
+            user2 :: User = {
+                id: 2,
+                name: "Bob",
+                roles: [],
+                permissions: ["write", 2],
+                log_data: ["logout"],
+                status_history: ["inactive"],
+            },
+        }
+    "#;
+
+        // Test valid user1
+        let doc = resolve_ok(source, "test_validation.mon");
+        let root_object = match doc.root.kind {
+            crate::ast::MonValueKind::Object(members) => members,
+            _ => panic!("Expected an object"),
+        };
+
+        let user1_member = root_object
+            .iter()
+            .find(|m| {
+                if let crate::ast::Member::Pair(p) = m {
+                    p.key == "user1"
+                } else {
+                    false
+                }
+            })
+            .unwrap();
+
+        if let crate::ast::Member::Pair(p) = user1_member {
+            let user1_object = match &p.value.kind {
+                crate::ast::MonValueKind::Object(members) => members,
+                _ => panic!("Expected user1 to be an object"),
+            };
+
+            // Check default email
+            let email_member = user1_object
+                .iter()
+                .find(|m| {
+                    if let crate::ast::Member::Pair(p) = m {
+                        p.key == "email"
+                    } else {
+                        false
+                    }
+                })
+                .unwrap();
+            if let crate::ast::Member::Pair(p) = email_member {
+                assert_eq!(
+                    p.value.kind,
+                    crate::ast::MonValueKind::String("default@example.com".to_string())
+                );
+            } else {
+                panic!("Expected email to be a pair");
+            }
+
+            // Check default is_active
+            let is_active_member = user1_object
+                .iter()
+                .find(|m| {
+                    if let crate::ast::Member::Pair(p) = m {
+                        p.key == "is_active"
+                    } else {
+                        false
+                    }
+                })
+                .unwrap();
+            if let crate::ast::Member::Pair(p) = is_active_member {
+                assert_eq!(p.value.kind, crate::ast::MonValueKind::Boolean(true));
+            } else {
+                panic!("Expected is_active to be a pair");
+            }
+        } else {
+            panic!("Expected user1 to be a pair member");
+        }
+    }
+
+    #[test]
+    fn test_struct_validation_missing_required_field() {
+        let source = r#"
+        {
+            User: #struct { id(Number), name(String) },
+            invalid_user :: User = { id: 3 },
+        }
+    "#;
+        let err = resolve_err(source, "test_validation.mon");
+        match err {
+            crate::error::ResolverError::Validation(
+                crate::error::ValidationError::MissingField { field_name, .. },
+            ) => {
+                assert_eq!(field_name, "name");
+            }
+            _ => panic!("Expected MissingField error, but got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_struct_validation_wrong_id_type() {
+        let source = r#"
+        {
+            User: #struct { id(Number), name(String) },
+            invalid_user :: User = { id: "four", name: "Charlie" },
+        }
+    "#;
+        let err = resolve_err(source, "test_validation.mon");
+        match err {
+            crate::error::ResolverError::Validation(
+                crate::error::ValidationError::TypeMismatch {
+                    field_name,
+                    expected_type,
+                    found_type,
+                    ..
+                },
+            ) => {
+                assert_eq!(field_name, "id");
+                assert_eq!(expected_type, "Number");
+                assert!(found_type.contains("String"));
+            }
+            _ => panic!("Expected TypeMismatch error for id, but got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_struct_validation_unexpected_field() {
+        let source = r#"
+        {
+            User: #struct { id(Number), name(String) },
+            invalid_user :: User = { id: 5, name: "David", age: 30 },
+        }
+    "#;
+        let err = resolve_err(source, "test_validation.mon");
+        match err {
+            crate::error::ResolverError::Validation(
+                crate::error::ValidationError::UnexpectedField { field_name, .. },
+            ) => {
+                assert_eq!(field_name, "age");
+            }
+            _ => panic!("Expected UnexpectedField error, but got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_struct_validation_roles_type_mismatch() {
+        let source = r#"
+        {
+            User: #struct { roles([String...]) },
+            invalid_user :: User = { roles: ["viewer", 123] },
+        }
+    "#;
+        let err = resolve_err(source, "test_validation.mon");
+        match err {
+            crate::error::ResolverError::Validation(
+                crate::error::ValidationError::TypeMismatch {
+                    field_name,
+                    expected_type,
+                    found_type,
+                    ..
+                },
+            ) => {
+                assert_eq!(field_name, "roles");
+                assert_eq!(expected_type, "String");
+                assert!(found_type.contains("Number"));
+            }
+            _ => panic!("Expected TypeMismatch error for roles, but got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_struct_validation_permissions_length_mismatch() {
+        let source = r#"
+        {
+            User: #struct { permissions([String, Number]) },
+            invalid_user :: User = { permissions: ["read"] },
+        }
+    "#;
+        let err = resolve_err(source, "test_validation.mon");
+        match err {
+            crate::error::ResolverError::Validation(
+                crate::error::ValidationError::TypeMismatch {
+                    field_name,
+                    expected_type,
+                    found_type,
+                    ..
+                },
+            ) => {
+                assert_eq!(field_name, "permissions");
+                assert!(expected_type.contains("tuple with 2 elements"));
+                assert!(found_type.contains("tuple with 1 elements"));
+            }
+            _ => panic!(
+                "Expected TypeMismatch error for permissions length, but got {:?}",
+                err
+            ),
+        }
+    }
+
+    #[test]
+    fn test_struct_validation_permissions_type_mismatch() {
+        let source = r#"
+        {
+            User: #struct { permissions([String, Number]) },
+            invalid_user :: User = { permissions: [8, "write"] },
+        }
+    "#;
+        let err = resolve_err(source, "test_validation.mon");
+        match err {
+            crate::error::ResolverError::Validation(
+                crate::error::ValidationError::TypeMismatch {
+                    field_name,
+                    expected_type,
+                    found_type,
+                    ..
+                },
+            ) => {
+                assert_eq!(field_name, "permissions");
+                assert_eq!(expected_type, "String");
+                assert!(found_type.contains("Number"));
+            }
+            _ => panic!(
+                "Expected TypeMismatch error for permissions types, but got {:?}",
+                err
+            ),
+        }
+    }
+
+    #[test]
+    fn test_struct_validation_log_data_first_type_mismatch() {
+        let source = r#"
+        {
+            User: #struct { log_data([String, Any...]) },
+            invalid_user :: User = { log_data: [123, "event"] },
+        }
+    "#;
+        let err = resolve_err(source, "test_validation.mon");
+        match err {
+            crate::error::ResolverError::Validation(
+                crate::error::ValidationError::TypeMismatch {
+                    field_name,
+                    expected_type,
+                    found_type,
+                    ..
+                },
+            ) => {
+                assert_eq!(field_name, "log_data");
+                assert_eq!(expected_type, "String");
+                assert!(found_type.contains("Number"));
+            }
+            _ => panic!(
+                "Expected TypeMismatch error for log_data first type, but got {:?}",
+                err
+            ),
+        }
+    }
+
+    #[test]
+    fn test_struct_validation_status_history_last_type_mismatch() {
+        let source = r#"
+        {
+            User: #struct { status_history([Boolean..., String]) },
+            invalid_user :: User = { status_history: [true, 123] },
+        }
+    "#;
+        let err = resolve_err(source, "test_validation.mon");
+        match err {
+            crate::error::ResolverError::Validation(
+                crate::error::ValidationError::TypeMismatch {
+                    field_name,
+                    expected_type,
+                    found_type,
+                    ..
+                },
+            ) => {
+                assert_eq!(field_name, "status_history");
+                assert_eq!(expected_type, "String");
+                assert!(found_type.contains("Number"));
+            }
+            _ => panic!(
+                "Expected TypeMismatch error for status_history last type, but got {:?}",
+                err
+            ),
+        }
+    }
+
+    #[test]
+    fn test_nested_struct_validation_ok() {
+        let source = r#"
+        {
+            Profile: #struct {
+                username(String),
+                email(String),
+            },
+            User: #struct {
+                id(Number),
+                profile(Profile),
+            },
+
+            // Valid nested struct
+            user1 :: User = {
+                id: 1,
+                profile: {
+                    username: "alice",
+                    email: "alice@example.com",
+                },
+            },
+        }
+    "#;
+
+        resolve_ok(source, "test_nested_ok.mon");
+    }
+
+    #[test]
+    fn test_nested_struct_validation_err() {
+        let source = r#"
+        {
+            Profile: #struct {
+                username(String),
+                email(String),
+            },
+            User: #struct {
+                id(Number),
+                profile(Profile),
+            },
+
+            // Invalid: Nested struct has wrong type for username
+            user2 :: User = {
+                id: 2,
+                profile: {
+                    username: 123,
+                    email: "bob@example.com",
+                },
+            },
+        }
+    "#;
+
+        let err = resolve_err(source, "test_nested_err.mon");
+        match err {
+            crate::error::ResolverError::Validation(
+                crate::error::ValidationError::TypeMismatch {
+                    field_name,
+                    expected_type,
+                    found_type,
+                    ..
+                },
+            ) => {
+                assert_eq!(field_name, "username");
+                assert_eq!(expected_type, "String");
+                assert!(found_type.contains("Number"));
+            }
+            _ => panic!(
+                "Expected TypeMismatch error for username, but got {:?}",
+                err
+            ),
+        }
+    }
+
+    #[test]
+    fn test_cross_file_validation() {
+        let source = fs::read_to_string("tests/cross_file_main.mon").unwrap();
+        resolve_ok(&source, "tests/cross_file_main.mon");
+    }
+
+    #[test]
+    fn test_parser_for_schemas_file() {
+        let source = fs::read_to_string("tests/cross_file_schemas.mon").unwrap();
+        let mut parser = Parser::new_with_name(&source, "test.mon".to_string()).unwrap();
+        let _ = parser.parse_document().unwrap();
+    }
+
+    #[test]
+    fn test_named_import_validation() {
+        let source = fs::read_to_string("tests/named_import_main.mon").unwrap();
+        resolve_ok(&source, "tests/named_import_main.mon");
     }
 }

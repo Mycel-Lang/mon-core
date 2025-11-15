@@ -1,5 +1,5 @@
 use mon_core::api::analyze;
-
+#[cfg(feature = "lsp")]
 #[test]
 fn test_get_definition_of_alias() {
     let source = r#"
