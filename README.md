@@ -1,108 +1,186 @@
-> MYCEL / MON is a hobby project. 
 
-# MON (Mycel Object Notation) Core
+# MON Core (`mon-core`)
 
 [![Crates.io](https://img.shields.io/crates/v/mon-core.svg)](https://crates.io/crates/mon-core)
 [![Docs.rs](https://docs.rs/mon-core/badge.svg)](https://docs.rs/mon-core)
-[![License](https://img.shields.io/crates/l/mon-core.svg)](LICENSE)
-[![CI](https://github.com/mycel-dot-org/mon/actions/workflows/rust.yml/badge.svg)](https://github.com/mycel-dot-org/mon/actions/workflows/rust.yml)
+[![License](https://img.shields.io/crates/l/mon-core.svg)](./LICENSE)
+[![CI](https://github.com/mycel-lang/mon/actions/workflows/rust.yml/badge.svg)](https://github.com/mycel-lang/mon/actions/workflows/rust.yml)
 
-`mon-core` is the foundational Rust implementation for **MON (Mycel Object Notation)**, a human-friendly data notation
-language designed for configuration, data exchange, and more. It prioritizes readability, structure, and reusability.
+`mon-core` is the reference Rust implementation of the **MON (Mycel Object Notation)** language — a human-focused configuration and data format designed to be readable, safe, and predictable.
 
-## Key Features
+This crate provides the parser, analyzer, validator, and core data model used by MON-based tooling, servers, CLIs, and compilers.
 
-* **Human-Readable Syntax:** Clean, intuitive syntax with support for comments and unquoted keys.
-* **Structured Data:** Organizes data in "labeled containers" (objects) with `key: value` pairs and arrays.
-* **Data Reusability (DRY):** Features like **anchors (`&`)**, **aliases (`*`)**, and **spreads (`...*`)** to avoid
-  repetition and promote modularity.
-* **Robust Type System:**
-    * **Type Definitions:** Supports custom `#struct` and `#enum` definitions.
-    * **Validation:** Built-in type validation using `:: Type` annotations, ensuring data conforms to defined schemas.
-    * **Collection Validation:** Advanced validation for arrays, including single-type, spread, tuple-like, and mixed
-      collections.
-* **Modularity & Imports:**
-    * **Cross-File References:** Allows splitting data across multiple files using `import` statements.
-    * **Namespaced Types:** Supports resolving and validating types defined in imported files, including namespaced
-      references.
-* **Rich Error Reporting:** Utilizes `miette` for clear, graphical diagnostics with source code snippets for parsing,
-  resolution, and validation errors.
+---
 
-## Usage
+## Table of Contents
 
-To use `mon-core`, add it to your `Cargo.toml`:
+* [Overview](#overview)
+* [Features](#features)
+* [Example](#example)
+* [Rust Quick Start](#rust-quick-start)
+* [Error Handling](#error-handling)
+* [Development](#development)
+* [Roadmap](#roadmap)
+* [License](#license)
+
+---
+
+## Overview
+
+MON aims to replace overly rigid formats (JSON) and overly permissive ones (YAML) with a syntax that stays readable without giving up safety or predictability.
+
+`mon-core` implements:
+
+* A forgiving parser with clear, context-rich error messages
+* A semantic analyzer with anchor/alias resolution
+* Type checking via `#struct`, `#enum`, and validated bindings
+* An internal IR suitable for compilers and higher-level tooling
+
+If you want to embed MON into your Rust application or build tooling around the language, this is the crate.
+
+For more information about mon [docs](docs/01_the_basic_structure.md) are here :D
+---
+
+## Features
+
+* **Clean syntax:** unquoted keys, comments, trailing commas
+* **Human-friendly booleans:** `on` / `off` as well as `true` / `false`
+* **Anchors & aliases:** safe reuse with explicit copy semantics (`&name`, `*name`)
+* **Deep merges:** `...*anchor` for structured overrides
+* **Types built in:** `#struct`, `#enum`, and `::` for validation
+* **Modular imports:** `import { A, B } from "./file.mon"`
+* **Detailed errors:** location-aware, colorized, actionable
+
+---
+
+## Example
+
+```mon
+import { ServerSettings } from "./schemas.mon"
+
+{
+    &base: {
+        host: "localhost",
+        port: 8080,
+    },
+
+    User: #struct {
+        id(Number),
+        name(String),
+        roles([String...]),
+    },
+
+    admin :: User = {
+        id: 1,
+        name: "Alice",
+        roles: ["admin", "editor"],
+    },
+
+    dev: {
+        ...*base,
+        port: 9001,
+        debug: on,
+    },
+}
+```
+
+---
+
+## Rust Quick Start
+
+Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-mon-core = "0.1.0" # Replace with the latest version
+mon-core = "0.1"
 ```
 
-For a quick start, check out the [example](examples/simple.rs) in the `examples/` directory.
+Parse and analyze:
 
 ```rust
-// examples/simple.rs
 use mon_core::analyze;
 
-    let mon_data = r#"
-        user: {
-            name: "John Doe",
-            email: "john.doe@example.com"
+fn main() {
+    let text = r#"
+        settings: {
+            name: "Example",
+            enabled: on,
         }
     "#;
 
-    match analyze(mon_data, "example.mon") {
+    match analyze(text, "config.mon") {
         Ok(result) => {
-            let json_output = result.to_json().unwrap();
-            println!("Successfully parsed MON to JSON:\n{}", json_output);
+            println!("JSON:\n{}", result.to_json().unwrap());
         }
-        Err(e) => {
-            eprintln!("Failed to parse MON: {:?}", e);
+        Err(err) => {
+            eprintln!("MON error:\n{err}");
         }
     }
+}
 ```
 
-## Project Architecture (High-Level)
+---
 
-`mon-core` is built with a layered architecture to support advanced tooling like Language Server Protocol (LSP) and
-compilers (`mycelc`). The core pipeline involves:
+## Error Handling
 
-1. **Parser & AST/CST:** Transforms raw MON text into a syntax tree, designed to be error-tolerant for real-time
-   feedback.
-2. **Semantic Analyzer & Semantic Model:** Gives meaning to the syntax tree through validation, reference resolution (
-   anchors, spreads, imports), and type checking.
-3. **Query & Traversal API:** Provides an interface for external tools to navigate and inspect both the raw syntax tree
-   and the fully resolved semantic model.
+MON is designed to fail loudly **and** helpfully.
 
-For a detailed breakdown of the architecture and future plans, please refer to `roadmap.md`.
+Example error (format depends on your terminal capabilities):
 
-## Building and Running
+```
+error[E0012]: expected Number, got String
+  --> config.mon:7:12
+   |
+ 6 |   age: "twenty",
+   |             ^^^ expected a Number here
+```
 
-This is a standard Rust library project.
+Errors include:
 
-* **Build the project:**
-  ```bash
-  cargo build
-  ```
+* the source span
+* the inferred and expected types
+* suggestions when applicable
 
-* **Run tests:**
-  ```bash
-  cargo test
-  ```
+---
 
-* **Check for compilation errors without building:**
-  ```bash
-  cargo check
-  ```
+## Development
 
-## Contributing
+Build:
 
-We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute,
-report bugs, and suggest features. Adherence to our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) is expected.
+```bash
+cargo build
+```
 
-## Development Conventions
+Test:
 
-* **Code Style:** Follow standard Rust conventions and formatting (`rustfmt`).
-* **Testing:** Unit tests are located within the source files under a `#[cfg(test)]` module and in the `tests/`
-  directory. Add tests for any new or modified functionality.
-* **Documentation:** The `docs` directory contains the specification and user guide for the MON language. Changes to the
-  language syntax or features should be reflected in these documents.
+```bash
+cargo test --all-features
+```
+
+Checks:
+
+```bash
+cargo check
+```
+
+The project follows standard Rust layout.
+Documentation lives in `docs/`. Any language or spec changes must be reflected there.
+
+---
+
+## Roadmap
+
+* Improved parser recovery modes
+* Type system stabilization
+* Performance pass on alias/anchor resolution
+* Better import graph validation
+* Tooling support (formatter, LSP)
+
+---
+
+## License
+
+Licensed under the MIT license.
+See [`LICENSE`](./LICENSE) for details.
+
+---

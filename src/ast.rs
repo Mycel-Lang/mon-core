@@ -22,6 +22,7 @@ pub struct MonValue {
 
 impl MonValue {
     /// Returns the source span of the value, which can be used for error reporting.
+    #[must_use] 
     pub fn get_source_span(&self) -> SourceSpan {
         SourceSpan::new(self.pos_start.into(), self.pos_end - self.pos_start)
     }
@@ -136,6 +137,7 @@ pub enum TypeDef {
 
 impl TypeDef {
     /// Returns the source span of the entire type definition.
+    #[must_use] 
     pub fn get_span(&self) -> SourceSpan {
         match self {
             TypeDef::Struct(s) => (s.pos_start, s.pos_end - s.pos_start).into(),
@@ -189,11 +191,12 @@ pub enum TypeSpec {
 }
 
 impl TypeSpec {
+    #[must_use] 
     pub fn get_span(&self) -> SourceSpan {
         match self {
-            TypeSpec::Simple(_, span) => *span,
-            TypeSpec::Collection(_, span) => *span,
-            TypeSpec::Spread(_, span) => *span,
+            TypeSpec::Simple(_, span)
+            | TypeSpec::Collection(_, span)
+            | TypeSpec::Spread(_, span) => *span,
         }
     }
 }
@@ -202,9 +205,9 @@ impl Display for Member {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Member::Pair(p) => write!(f, "Pair({}: {})", p.key, p.value),
-            Member::Spread(s) => write!(f, "Spread(...*{})", s),
-            Member::Import(i) => write!(f, "Import({:?})", i),
-            Member::TypeDefinition(t) => write!(f, "TypeDef({:?})", t),
+            Member::Spread(s) => write!(f, "Spread(...*{s})"),
+            Member::Import(i) => write!(f, "Import({i:?})"),
+            Member::TypeDefinition(t) => write!(f, "TypeDef({t:?})"),
         }
     }
 }
@@ -218,6 +221,7 @@ pub struct SymbolTable {
 
 impl SymbolTable {
     /// Creates a new, empty symbol table.
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
@@ -232,14 +236,14 @@ impl Display for MonDocument {
 impl Display for MonValueKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            MonValueKind::String(s) => write!(f, "\"{}\"", s),
-            MonValueKind::Number(n) => write!(f, "{}", n),
-            MonValueKind::Boolean(b) => write!(f, "{}", b),
+            MonValueKind::String(s) => write!(f, "\"{s}\""),
+            MonValueKind::Number(n) => write!(f, "{n}"),
+            MonValueKind::Boolean(b) => write!(f, "{b}"),
             MonValueKind::Null => write!(f, "null"),
             MonValueKind::Object(o) => {
                 write!(f, "{{")?;
                 for (i, member) in o.iter().enumerate() {
-                    write!(f, "{}", member)?;
+                    write!(f, "{member}")?;
                     if i < o.len() - 1 {
                         write!(f, ", ")?;
                     }
@@ -249,21 +253,21 @@ impl Display for MonValueKind {
             MonValueKind::Array(a) => {
                 write!(f, "[")?;
                 for (i, value) in a.iter().enumerate() {
-                    write!(f, "{}", value)?;
+                    write!(f, "{value}")?;
                     if i < a.len() - 1 {
                         write!(f, ", ")?;
                     }
                 }
                 write!(f, "]")
             }
-            MonValueKind::Alias(a) => write!(f, "*{}", a),
+            MonValueKind::Alias(a) => write!(f, "*{a}"),
             MonValueKind::EnumValue {
                 enum_name,
                 variant_name,
             } => {
-                write!(f, "${}.{}", enum_name, variant_name)
+                write!(f, "${enum_name}.{variant_name}")
             }
-            MonValueKind::ArraySpread(s) => write!(f, "...*{}", s),
+            MonValueKind::ArraySpread(s) => write!(f, "...*{s}"),
         }
     }
 }
@@ -271,7 +275,7 @@ impl Display for MonValueKind {
 impl Display for MonValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(anchor) = &self.anchor {
-            write!(f, "&{} ", anchor)?;
+            write!(f, "&{anchor} ")?;
         }
         write!(f, "{}", self.kind)
     }
@@ -279,6 +283,7 @@ impl Display for MonValue {
 
 impl Pair {
     #[track_caller]
+    #[must_use] 
     pub fn get_span(&self) -> SourceSpan {
         match &self.validation {
             None => {
@@ -289,9 +294,9 @@ impl Pair {
                 SourceSpan::new(0.into(), 0)
             }
             Some(valid) => match valid {
-                TypeSpec::Simple(_, source_span) => *source_span,
-                TypeSpec::Collection(_, source_span) => *source_span,
-                TypeSpec::Spread(_, source_span) => *source_span,
+                TypeSpec::Simple(_, source_span)
+                | TypeSpec::Collection(_, source_span)
+                | TypeSpec::Spread(_, source_span) => *source_span,
             },
         }
     }

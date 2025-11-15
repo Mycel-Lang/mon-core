@@ -81,6 +81,7 @@ pub struct Token {
 }
 
 impl Token {
+    #[must_use] 
     pub fn new(ttype: TokenType, pos_start: usize, pos_end: usize) -> Token {
         Token {
             ttype,
@@ -96,6 +97,7 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
+    #[must_use] 
     pub fn new(input: &'a str) -> Self {
         Self {
             chars: input.chars().peekable(),
@@ -166,7 +168,7 @@ impl<'a> Lexer<'a> {
                 c if c.is_whitespace() => self.read_whitespace(),
                 c if c.is_ascii_alphabetic() || c == '_' => self.read_identifier(c),
                 c if c.is_ascii_digit()
-                    || (c == '-' && self.peek().is_some_and(|c| c.is_ascii_digit())) =>
+                    || (c == '-' && self.peek().is_some_and(char::is_ascii_digit)) =>
                 {
                     self.read_number(c)
                 }
@@ -320,10 +322,12 @@ pub(crate) fn tokens_to_pretty_string(tokens: &[Token]) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::explicit_auto_deref)]
 mod tests {
     use super::*;
 
-    fn assert_tokens(input: &str, expected: Vec<TokenType>) {
+    fn assert_tokens(input: &str, expected: &[TokenType]) {
         let mut lexer = Lexer::new(input);
         let tokens = lexer.lex();
         let token_types: Vec<TokenType> = tokens.into_iter().map(|t| t.ttype).collect();
@@ -339,7 +343,7 @@ mod tests {
 
     #[test]
     fn test_eof() {
-        assert_tokens("", vec![TokenType::Eof]);
+        assert_tokens("", &[TokenType::Eof]);
     }
 
     #[test]
@@ -361,14 +365,14 @@ mod tests {
             TokenType::Asterisk,
             TokenType::Eof,
         ];
-        assert_tokens(input, expected);
+        assert_tokens(input, &expected);
     }
 
     #[test]
     fn test_multi_char_operators() {
         let input = ":: ...";
         let expected = vec![TokenType::DoubleColon, TokenType::Spread, TokenType::Eof];
-        assert_tokens(input, expected);
+        assert_tokens(input, &expected);
     }
 
     #[test]
@@ -385,7 +389,7 @@ mod tests {
             TokenType::As,
             TokenType::Eof,
         ];
-        assert_tokens(input, expected);
+        assert_tokens(input, &expected);
     }
 
     #[test]
@@ -397,7 +401,7 @@ mod tests {
             TokenType::Identifier("_baz".to_string()),
             TokenType::Eof,
         ];
-        assert_tokens(input, expected);
+        assert_tokens(input, &expected);
     }
 
     #[test]
@@ -410,7 +414,7 @@ mod tests {
             TokenType::Number(0.5),
             TokenType::Eof,
         ];
-        assert_tokens(input, expected);
+        assert_tokens(input, &expected);
     }
 
     #[test]
@@ -418,11 +422,11 @@ mod tests {
         let input = r#""hello world" "" "another""#;
         let expected = vec![
             TokenType::String("hello world".to_string()),
-            TokenType::String("".to_string()),
+            TokenType::String(String::new()),
             TokenType::String("another".to_string()),
             TokenType::Eof,
         ];
-        assert_tokens(input, expected);
+        assert_tokens(input, &expected);
     }
 
     #[test]
@@ -432,7 +436,7 @@ mod tests {
             TokenType::String("hello \"world\"\t\n\r".to_string()),
             TokenType::Eof,
         ];
-        assert_tokens(input, expected);
+        assert_tokens(input, &expected);
     }
 
     #[test]
@@ -522,7 +526,7 @@ mod tests {
             TokenType::RBrace,
             TokenType::Eof,
         ];
-        print!("{}", input);
-        assert_tokens(input, expected);
+        print!("{input}");
+        assert_tokens(input, &expected);
     }
 }

@@ -11,10 +11,10 @@ fn main() {
     match analyze(mon_data, "example.mon") {
         Ok(result) => {
             let json_output = result.to_json().unwrap();
-            println!("Successfully parsed MON to JSON:\n{}", json_output);
+            println!("Successfully parsed MON to JSON:\n{json_output}");
         }
         Err(e) => {
-            eprintln!("Failed to parse MON: {:?}", e);
+            eprintln!("Failed to parse MON: {e:?}");
         }
     }
 }

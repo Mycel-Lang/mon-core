@@ -131,7 +131,7 @@ jobs:
       - name: Clippy (lint only; print warnings, don't fail on them)
         run: |
           # skip linting dependencies for speed; show pedantic warnings but keep CI green
-          cargo clippy --workspace --all-targets --features lsp --no-deps -- -W clippy::pedantic || true
+          cargo clippy --workspace --all-targets --features lsp --no-deps || true
 
       - name: Format check (rustfmt)
         run: |

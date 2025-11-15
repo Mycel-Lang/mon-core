@@ -7,9 +7,9 @@ pub mod error;
 
 pub mod lexer;
 #[cfg(feature = "lsp")]
-pub(crate) mod lsp;
+pub mod lsp;
 #[cfg(feature = "lsp")]
-pub(crate) mod utils;
+pub mod utils;
 
 pub mod parser;
 pub mod resolver;

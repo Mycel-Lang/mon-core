@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use crate::ast::{MonDocument, MonValue, SymbolTable, TypeSpec};
 use crate::error::MonError;
 
@@ -40,16 +41,23 @@ impl Serialize for AnalysisResult {
 
 impl AnalysisResult {
     /// Serializes the resolved MON data into a generic, serializable `Value`.
+    #[must_use]
     pub fn to_value(&self) -> Value {
         to_value(&self.document.root)
     }
 
     /// Serializes the resolved MON data into a pretty-printed JSON string.
+    ///
+    /// # Errors
+    /// Returns a `serde_json::Error` if serialization fails.
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(&self)
     }
 
     /// Serializes the resolved MON data into a YAML string.
+    ///
+    /// # Errors
+    /// Returns a `serde_yaml::Error` if serialization fails.
     pub fn to_yaml(&self) -> Result<String, serde_yaml::Error> {
         serde_yaml::to_string(&self)
     }
@@ -57,6 +65,7 @@ impl AnalysisResult {
     #[cfg(feature = "lsp")]
     /// Finds the definition of the symbol at the given character position.
     /// This is the core of "go to definition".
+    #[must_use]
     pub fn get_definition_at(&self, position: usize) -> Option<SourceSpan> {
         let node = find_node_at(&self.unresolved_document.root, position)?;
 
@@ -81,6 +90,7 @@ impl AnalysisResult {
     #[cfg(feature = "lsp")]
     /// Gets information about the type of the symbol at the given character position.
     /// This is the core of "hover" tooltips.
+    #[must_use]
     pub fn get_type_info_at(&self, position: usize) -> Option<String> {
         let symbol_info = lsp::find_symbol_at(&self.unresolved_document.root, position)?;
 
@@ -195,6 +205,10 @@ fn find_node_in_type_spec(type_spec: &TypeSpec, position: usize) -> Option<Found
 /// # Errors
 ///
 /// Returns a `MonError` if parsing, resolution, or validation fails.
+///
+/// # Panics
+///
+/// Panics if the current directory cannot be determined when `file_name` is relative.
 pub fn analyze(source: &str, file_name: &str) -> Result<AnalysisResult, MonError> {
     let mut parser = Parser::new_with_name(source, file_name.to_string())?;
     let document = parser.parse_document()?;
@@ -219,18 +233,95 @@ pub fn analyze(source: &str, file_name: &str) -> Result<AnalysisResult, MonError
 impl Display for TypeSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypeSpec::Simple(name, _) => write!(f, "{}", name),
+            TypeSpec::Simple(name, _) => write!(f, "{name}"),
             TypeSpec::Collection(types, _) => {
                 write!(f, "[")?;
                 for (i, t) in types.iter().enumerate() {
-                    write!(f, "{}", t)?;
+                    write!(f, "{t}")?;
                     if i < types.len() - 1 {
                         write!(f, ", ")?;
                     }
                 }
                 write!(f, "]")
             }
-            TypeSpec::Spread(t, _) => write!(f, "{}...", t),
+            TypeSpec::Spread(t, _) => write!(f, "{t}..."),
         }
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::analyze;
+
+    #[test]
+    fn test_simple_parse_to_json() {
+        let source = r#"
+        {
+            name: "My App",
+            version: 1.0,
+            is_enabled: true,
+            features: ["a", "b", "c"],
+            config: {
+                host: "localhost",
+                port: 8080.0,
+            }
+        }
+    "#;
+
+        let expected_json = serde_json::json!({
+            "name": "My App",
+            "version": 1.0,
+            "is_enabled": true,
+            "features": ["a", "b", "c"],
+            "config": {
+                "host": "localhost",
+                "port": 8080.0,
+            }
+        });
+
+        let analysis_result = analyze(source, "test.mon").unwrap();
+        let result = analysis_result.to_json().unwrap();
+        let result_json: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(result_json, expected_json);
+    }
+
+    #[test]
+    fn test_analyze_semantic_info() {
+        let source = r"
+        {
+            MyType: #struct { field(String) },
+            &my_anchor: { a: 1 },
+            value: *my_anchor,
+        }
+    ";
+
+        let analysis_result = analyze(source, "test.mon").unwrap();
+
+        // Check symbol table
+        assert!(analysis_result.symbol_table.types.contains_key("MyType"));
+
+        // Check anchors
+        assert!(analysis_result.anchors.contains_key("my_anchor"));
+    }
+
+    #[test]
+    fn test_simple_parse_to_yaml() {
+        let source = r#"
+        {
+            name: "My App",
+            version: 1.0,
+            is_enabled: true,
+        }
+    "#;
+
+        let expected_yaml = "is_enabled: true\nname: My App\nversion: 1.0\n";
+
+        let analysis_result = analyze(source, "test.mon").unwrap();
+        let result = analysis_result.to_yaml().unwrap();
+
+        assert_eq!(result, expected_yaml);
+    }
+
 }

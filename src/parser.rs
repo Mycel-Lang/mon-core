@@ -1,4 +1,4 @@
-use crate::ast::*;
+use crate::ast::{MonDocument, ImportStatement, MonValue, MonValueKind, Member, Pair, ImportSpec, ImportSpecifier, TypeDefinition, TypeDef, StructDef, FieldDef, EnumDef, TypeSpec};
 use crate::error::{MonError, ParserError};
 use crate::lexer::{Lexer, Token, TokenType};
 use miette::{GraphicalReportHandler, NamedSource, Report};
@@ -15,10 +15,29 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Creates a new `Parser` instance with a default file name "source.mon".
+    ///
+    /// # Arguments
+    ///
+    /// * `source_text` - The MON source code as a string.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `MonError` if lexing the source text fails.
     pub fn new(source_text: &'a str) -> Result<Self, MonError> {
         Self::new_with_name(source_text, "source.mon".to_string())
     }
 
+    /// Creates a new `Parser` instance with a specified file name.
+    ///
+    /// # Arguments
+    ///
+    /// * `source_text` - The MON source code as a string.
+    /// * `name` - The name of the file being parsed (used for error reporting).
+    ///
+    /// # Errors
+    ///
+    /// Returns a `MonError` if lexing the source text fails.
     pub fn new_with_name(source_text: &'a str, name: String) -> Result<Self, MonError> {
         let source = Arc::new(NamedSource::new(name, source_text.to_string()));
         let mut lexer = Lexer::new(source_text);
@@ -38,12 +57,16 @@ impl<'a> Parser<'a> {
 
     // === Main Parsing Methods ===
 
-    ///    Document ::= { ImportStatement } Object
+    /// Parses the entire MON document, including import statements and the root object.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `MonError` if parsing fails at any point.
     pub fn parse_document(&mut self) -> Result<MonDocument, MonError> {
         let mut imports: Vec<ImportStatement> = Vec::new();
 
         // consume zero-or-more import statements
-        while self.check(TokenType::Import) {
+        while self.check(&TokenType::Import) {
             let imp = self.parse_import_statement()?;
             imports.push(imp);
             // DON'T call self.advance() here — parse_import_statement already advances
@@ -53,30 +76,30 @@ impl<'a> Parser<'a> {
         let root = self.parse_object()?;
 
         // After the root object, we expect the end of the file.
-        self.expect(TokenType::Eof)?;
+        self.expect(&TokenType::Eof)?;
         Ok(MonDocument { root, imports })
     }
 
-    /// Object ::= "{" [ MemberList ] "}"
-    /// MemberList ::= Member { "," Member } [ "," ]
+    /// Object ::= "{" [ `MemberList` ] "}"
+    /// `MemberList` ::= `Member { , Member } [ , ]`
     fn parse_object(&mut self) -> Result<MonValue, MonError> {
         let start_token = self.current_token()?.clone();
-        self.expect(TokenType::LBrace)?;
+        self.expect(&TokenType::LBrace)?;
         let mut members = Vec::new();
-        if !self.check(TokenType::RBrace) {
+        if !self.check(&TokenType::RBrace) {
             // Parse the first member
             members.push(self.parse_member()?);
             // Keep parsing members as long as they are preceded by a comma
-            while self.match_token(TokenType::Comma) {
+            while self.match_token(&TokenType::Comma) {
                 // If we match a comma but the next token is a brace, it's a trailing comma
-                if self.check(TokenType::RBrace) {
+                if self.check(&TokenType::RBrace) {
                     break;
                 }
                 members.push(self.parse_member()?);
             }
         }
         let end_token = self.current_token()?.clone();
-        self.expect(TokenType::RBrace)?;
+        self.expect(&TokenType::RBrace)?;
         Ok(MonValue {
             kind: MonValueKind::Object(members),
             anchor: None, // Anchors are attached to values, not objects themselves
@@ -85,15 +108,15 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Array ::= "[" [ ValueList ] "]"
-    /// ValueList ::= Value { "," Value } [ "," ]
+    /// Array ::= "[" [ `ValueList` ] "]"
+    /// `ValueList` ::= `Value { , Value } [ , ]`
     fn parse_array(&mut self) -> Result<MonValue, MonError> {
         let start_token = self.current_token()?.clone();
-        self.expect(TokenType::LBracket)?;
+        self.expect(&TokenType::LBracket)?;
         let mut values = Vec::new();
-        if !self.check(TokenType::RBracket) {
+        if !self.check(&TokenType::RBracket) {
             loop {
-                if self.check(TokenType::Spread) {
+                if self.check(&TokenType::Spread) {
                     let spread_start_token = self.current_token()?.clone();
                     let spread_name = self.parse_spread()?;
                     let spread_end_token = self.current_token_before_advance()?.clone(); // Get token before advance
@@ -107,16 +130,16 @@ impl<'a> Parser<'a> {
                     values.push(self.parse_value()?);
                 }
 
-                if !self.match_token(TokenType::Comma) {
+                if !self.match_token(&TokenType::Comma) {
                     break;
                 }
-                if self.check(TokenType::RBracket) {
+                if self.check(&TokenType::RBracket) {
                     break; // Allow trailing comma
                 }
             }
         }
         let end_token = self.current_token()?.clone();
-        self.expect(TokenType::RBracket)?;
+        self.expect(&TokenType::RBracket)?;
         Ok(MonValue {
             kind: MonValueKind::Array(values),
             anchor: None,
@@ -125,7 +148,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Value ::= Object | Array | Alias | EnumValue | Literal
+    /// Value ::= Object | Array | Alias | `EnumValue` | Literal
     /// Attaches an anchor if one is present.
     fn parse_value(&mut self) -> Result<MonValue, MonError> {
         let anchor = self.parse_optional_anchor()?;
@@ -190,13 +213,13 @@ impl<'a> Parser<'a> {
         Ok(value)
     }
 
-    /// Member ::= Pair | TypeDefinition | Spread
+    /// Member ::= Pair | `TypeDefinition` | Spread
     fn parse_member(&mut self) -> Result<Member, MonError> {
         match self.current_token()?.ttype {
             TokenType::Spread => self.parse_spread().map(Member::Spread),
             // A TypeDefinition starts with an Identifier followed by a Colon and a Hash
             TokenType::Identifier(_)
-                if self.peek_is(TokenType::Colon) && self.peek_next_is(TokenType::Hash) =>
+                if self.peek_is(&TokenType::Colon) && self.peek_next_is(&TokenType::Hash) =>
             {
                 self.parse_type_definition().map(Member::TypeDefinition)
             }
@@ -205,14 +228,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Pair ::= KeyPart [ Validation ] ( ":" | "=" ) Value
-    /// KeyPart ::= [ Anchor ] Key
+    /// Pair ::= `KeyPart` [ Validation ] ( ":" | "=" ) Value
+    /// `KeyPart` ::= [ Anchor ] Key
     /// Key ::= Identifier | String
     fn parse_pair(&mut self) -> Result<Pair, MonError> {
         let mut anchor_from_key: Option<String> = None;
 
         // Handle the case where the key itself is an anchor, e.g., `&my_anchor: value`
-        let key = if self.match_token(TokenType::Ampersand) {
+        let key = if self.match_token(&TokenType::Ampersand) {
             let key_name = self.parse_key()?;
             anchor_from_key = Some(key_name.clone());
             key_name
@@ -222,7 +245,7 @@ impl<'a> Parser<'a> {
 
         let validation = self.parse_optional_validation()?;
 
-        if !self.match_token(TokenType::Colon) && !self.match_token(TokenType::Equals) {
+        if !self.match_token(&TokenType::Colon) && !self.match_token(&TokenType::Equals) {
             return self.err_unexpected("':' or '=' after key");
         }
 
@@ -258,7 +281,7 @@ impl<'a> Parser<'a> {
         }
 
         // Handle dotted keys like `schemas.User`
-        while self.match_token(TokenType::Dot) {
+        while self.match_token(&TokenType::Dot) {
             let token = self.current_token()?;
             if let TokenType::Identifier(s) = &token.ttype {
                 key_parts.push(s.clone());
@@ -273,7 +296,7 @@ impl<'a> Parser<'a> {
 
     /// Anchor ::= "&" Identifier
     fn parse_optional_anchor(&mut self) -> Result<Option<String>, MonError> {
-        if self.match_token(TokenType::Ampersand) {
+        if self.match_token(&TokenType::Ampersand) {
             let token = self.current_token()?;
             if let TokenType::Identifier(name) = &token.ttype {
                 let name = name.clone();
@@ -290,11 +313,11 @@ impl<'a> Parser<'a> {
     /// Alias ::= "*" Identifier { "." Identifier }
     fn parse_alias(&mut self) -> Result<MonValue, MonError> {
         let start_token = self.current_token()?.clone();
-        self.expect(TokenType::Asterisk)?;
+        self.expect(&TokenType::Asterisk)?;
         let mut name = self.parse_key()?;
         let mut end_pos = self.current_token_before_advance()?.pos_end; // End of the first key part
 
-        while self.match_token(TokenType::Dot) {
+        while self.match_token(&TokenType::Dot) {
             name.push('.');
             let key_part = self.parse_key()?;
             end_pos = self.current_token_before_advance()?.pos_end; // Update end_pos
@@ -310,7 +333,7 @@ impl<'a> Parser<'a> {
 
     /// Spread ::= "..." Alias
     fn parse_spread(&mut self) -> Result<String, MonError> {
-        self.expect(TokenType::Spread)?;
+        self.expect(&TokenType::Spread)?;
         let alias = self.parse_alias()?;
         if let MonValueKind::Alias(name) = alias.kind {
             Ok(name)
@@ -320,39 +343,39 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// ImportStatement ::= "import" ( NamespaceImport | NamedImport ) "from" String
+    /// `ImportStatement` ::= "import" ( `NamespaceImport` | `NamedImport` ) "from" String
     fn parse_import_statement(&mut self) -> Result<ImportStatement, MonError> {
         let start_token = self.current_token()?.clone(); // Capture start token for pos_start
-        self.expect(TokenType::Import)?;
+        self.expect(&TokenType::Import)?;
 
-        let spec = if self.match_token(TokenType::Asterisk) {
+        let spec = if self.match_token(&TokenType::Asterisk) {
             // NamespaceImport ::= "*" "as" Identifier
-            self.expect(TokenType::As)?;
+            self.expect(&TokenType::As)?;
             let name = self.parse_key()?;
             ImportSpec::Namespace(name)
         } else {
             // NamedImport ::= "{" [ ImportSpecifier { "," ImportSpecifier } [ "," ] ] "}"
-            self.expect(TokenType::LBrace)?;
+            self.expect(&TokenType::LBrace)?;
             let mut specifiers = Vec::new();
-            if !self.check(TokenType::RBrace) {
+            if !self.check(&TokenType::RBrace) {
                 loop {
                     // ImportSpecifier ::= [ "&" ] Identifier
-                    let is_anchor = self.match_token(TokenType::Ampersand);
+                    let is_anchor = self.match_token(&TokenType::Ampersand);
                     let name = self.parse_key()?;
                     specifiers.push(ImportSpecifier { name, is_anchor });
-                    if !self.match_token(TokenType::Comma) {
+                    if !self.match_token(&TokenType::Comma) {
                         break;
                     }
-                    if self.check(TokenType::RBrace) {
+                    if self.check(&TokenType::RBrace) {
                         break;
                     }
                 }
             }
-            self.expect(TokenType::RBrace)?;
+            self.expect(&TokenType::RBrace)?;
             ImportSpec::Named(specifiers)
         };
 
-        self.expect(TokenType::From)?;
+        self.expect(&TokenType::From)?;
         let path_token = self.current_token()?.clone(); // Capture path token for pos_end
         let path = self.parse_key()?;
 
@@ -364,13 +387,13 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// TypeDefinition ::= Identifier ":" ( StructDefinition | EnumDefinition )
+    /// `TypeDefinition` ::= Identifier ":" ( `StructDefinition` | `EnumDefinition` )
     fn parse_type_definition(&mut self) -> Result<TypeDefinition, MonError> {
         let name_token = self.current_token()?.clone();
         let name = self.parse_key()?;
-        self.expect(TokenType::Colon)?;
+        self.expect(&TokenType::Colon)?;
         let hash_token = self.current_token()?.clone();
-        self.expect(TokenType::Hash)?;
+        self.expect(&TokenType::Hash)?;
 
         let token = self.current_token()?;
         let (def_type, end_pos) = match &token.ttype {
@@ -404,24 +427,24 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// StructDefinition ::= "{" [ FieldList ] "}"
+    /// `StructDefinition` ::= "{" [ `FieldList` ] "}"
     fn parse_struct_definition(&mut self) -> Result<StructDef, MonError> {
         let start_token = self.current_token()?.clone();
-        self.expect(TokenType::LBrace)?;
+        self.expect(&TokenType::LBrace)?;
         let mut fields = Vec::new();
-        if !self.check(TokenType::RBrace) {
+        if !self.check(&TokenType::RBrace) {
             loop {
                 fields.push(self.parse_field_definition()?);
-                if !self.match_token(TokenType::Comma) {
+                if !self.match_token(&TokenType::Comma) {
                     break;
                 }
-                if self.check(TokenType::RBrace) {
+                if self.check(&TokenType::RBrace) {
                     break;
                 }
             }
         }
         let end_token = self.current_token()?.clone();
-        self.expect(TokenType::RBrace)?;
+        self.expect(&TokenType::RBrace)?;
         Ok(StructDef {
             fields,
             pos_start: start_token.pos_start,
@@ -429,14 +452,14 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// FieldDefinition ::= Identifier "(" Type ")" [ "=" Value ]
+    /// `FieldDefinition` ::= Identifier "(" Type ")" [ "=" Value ]
     fn parse_field_definition(&mut self) -> Result<FieldDef, MonError> {
         let name = self.parse_key()?;
-        self.expect(TokenType::LParen)?;
+        self.expect(&TokenType::LParen)?;
         let type_spec = self.parse_type_spec()?;
-        self.expect(TokenType::RParen)?;
+        self.expect(&TokenType::RParen)?;
 
-        let default_value = if self.match_token(TokenType::Equals) {
+        let default_value = if self.match_token(&TokenType::Equals) {
             Some(self.parse_value()?)
         } else {
             None
@@ -449,24 +472,24 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// EnumDefinition ::= "{" [ Identifier { "," Identifier } [ "," ] ] "}"
+    /// `EnumDefinition` ::= `{ [ Identifier { , Identifier } [ , ] ] }`
     fn parse_enum_definition(&mut self) -> Result<EnumDef, MonError> {
         let start_token = self.current_token()?.clone();
-        self.expect(TokenType::LBrace)?;
+        self.expect(&TokenType::LBrace)?;
         let mut variants = Vec::new();
-        if !self.check(TokenType::RBrace) {
+        if !self.check(&TokenType::RBrace) {
             loop {
                 variants.push(self.parse_key()?);
-                if !self.match_token(TokenType::Comma) {
+                if !self.match_token(&TokenType::Comma) {
                     break;
                 }
-                if self.check(TokenType::RBrace) {
+                if self.check(&TokenType::RBrace) {
                     break;
                 }
             }
         }
         let end_token = self.current_token()?.clone();
-        self.expect(TokenType::RBrace)?;
+        self.expect(&TokenType::RBrace)?;
         Ok(EnumDef {
             variants,
             pos_start: start_token.pos_start,
@@ -476,24 +499,24 @@ impl<'a> Parser<'a> {
 
     /// Validation ::= "::" Type
     fn parse_optional_validation(&mut self) -> Result<Option<TypeSpec>, MonError> {
-        if self.match_token(TokenType::DoubleColon) {
+        if self.match_token(&TokenType::DoubleColon) {
             self.parse_type_spec().map(Some)
         } else {
             Ok(None)
         }
     }
 
-    /// Type ::= CollectionType | Identifier | "String" | ...
+    /// Type ::= `CollectionType` | Identifier | "String" | ...
     fn parse_type_spec(&mut self) -> Result<TypeSpec, MonError> {
         let start_token = self.current_token()?.clone();
-        if self.check(TokenType::LBracket) {
+        if self.check(&TokenType::LBracket) {
             // CollectionType ::= "[" Type [ "..." ] { "," Type [ "..." ] } "]"
-            self.expect(TokenType::LBracket)?;
+            self.expect(&TokenType::LBracket)?;
             let mut types = Vec::new();
-            if !self.check(TokenType::RBracket) {
+            if !self.check(&TokenType::RBracket) {
                 loop {
                     let mut type_spec = self.parse_type_spec()?;
-                    if self.match_token(TokenType::Spread) {
+                    if self.match_token(&TokenType::Spread) {
                         let end_token = self.current_token_before_advance()?.clone();
                         let span = (
                             type_spec.get_span().offset(),
@@ -504,16 +527,16 @@ impl<'a> Parser<'a> {
                     }
                     types.push(type_spec);
 
-                    if !self.match_token(TokenType::Comma) {
+                    if !self.match_token(&TokenType::Comma) {
                         break;
                     }
-                    if self.check(TokenType::RBracket) {
+                    if self.check(&TokenType::RBracket) {
                         break;
                     }
                 }
             }
             let end_token = self.current_token()?.clone();
-            self.expect(TokenType::RBracket)?;
+            self.expect(&TokenType::RBracket)?;
             let span = (
                 start_token.pos_start,
                 end_token.pos_end - start_token.pos_start,
@@ -533,12 +556,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// EnumValue ::= "$" Identifier "." Identifier
+    /// `EnumValue` ::= "$" Identifier "." Identifier
     fn parse_enum_value(&mut self) -> Result<MonValue, MonError> {
         let start_token = self.current_token()?.clone();
-        self.expect(TokenType::Dollar)?;
+        self.expect(&TokenType::Dollar)?;
         let enum_name = self.parse_key()?;
-        self.expect(TokenType::Dot)?;
+        self.expect(&TokenType::Dot)?;
         let variant_name = self.parse_key()?;
         let end_token = self.current_token_before_advance()?.clone(); // End of the variant_name
 
@@ -586,17 +609,17 @@ impl<'a> Parser<'a> {
     }
 
     #[track_caller]
-    fn expect(&mut self, expected: TokenType) -> Result<(), MonError> {
+    fn expect(&mut self, expected: &TokenType) -> Result<(), MonError> {
         let token = self.current_token()?.clone();
-        if std::mem::discriminant(&token.ttype) == std::mem::discriminant(&expected) {
+        if std::mem::discriminant(&token.ttype) == std::mem::discriminant(expected) {
             self.advance();
             Ok(())
         } else {
-            self.err_unexpected(&format!("{:?}", expected))
+            self.err_unexpected(&format!("{expected:?}"))
         }
     }
 
-    fn match_token(&mut self, ttype: TokenType) -> bool {
+    fn match_token(&mut self, ttype: &TokenType) -> bool {
         if self.check(ttype) {
             self.advance();
             true
@@ -605,25 +628,25 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn check(&self, ttype: TokenType) -> bool {
+    fn check(&self, ttype: &TokenType) -> bool {
         if let Ok(token) = self.current_token() {
-            std::mem::discriminant(&token.ttype) == std::mem::discriminant(&ttype)
+            std::mem::discriminant(&token.ttype) == std::mem::discriminant(ttype)
         } else {
             false
         }
     }
 
-    fn peek_is(&self, ttype: TokenType) -> bool {
+    fn peek_is(&self, ttype: &TokenType) -> bool {
         if let Some(token) = self.tokens.get(self.position + 1) {
-            std::mem::discriminant(&token.ttype) == std::mem::discriminant(&ttype)
+            std::mem::discriminant(&token.ttype) == std::mem::discriminant(ttype)
         } else {
             false
         }
     }
 
-    fn peek_next_is(&self, ttype: TokenType) -> bool {
+    fn peek_next_is(&self, ttype: &TokenType) -> bool {
         if let Some(token) = self.tokens.get(self.position + 2) {
-            std::mem::discriminant(&token.ttype) == std::mem::discriminant(&ttype)
+            std::mem::discriminant(&token.ttype) == std::mem::discriminant(ttype)
         } else {
             false
         }
@@ -646,7 +669,7 @@ impl<'a> Parser<'a> {
 #[allow(dead_code)]
 fn pretty_result(out: Result<MonDocument, MonError>) -> String {
     match out {
-        Ok(doc) => format!("{:#?}", doc), // debug format for success
+        Ok(doc) => format!("{doc:#?}"), // debug format for success
         Err(err) => {
             let report: Report = Report::new(err);
             let handler = GraphicalReportHandler::new(); // pretty ANSI colors
@@ -658,6 +681,7 @@ fn pretty_result(out: Result<MonDocument, MonError>) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::match_wildcard_for_single_variants)]
 mod tests {
     use super::*;
     use miette::Report;
@@ -669,9 +693,9 @@ mod tests {
             Ok(doc) => doc,
             Err(err) => {
                 let report = Report::from(err);
-                print!("{:?}", report);
+                print!("{report:?}");
 
-                panic!("{:#}", report);
+                panic!("{report:#}");
             }
         }
     }
@@ -701,7 +725,7 @@ mod tests {
 
     #[test]
     fn test_anchor_and_alias() {
-        let doc = parse_ok(r#"{ &anchor1 : 123, key2: *anchor1 }"#);
+        let doc = parse_ok(r"{ &anchor1 : 123, key2: *anchor1 }");
         let members = match doc.root.kind {
             MonValueKind::Object(m) => m,
             _ => panic!(),
@@ -725,7 +749,7 @@ mod tests {
 
     #[test]
     fn test_spread() {
-        let doc = parse_ok(r#"{ ...*my_anchor }"#);
+        let doc = parse_ok(r"{ ...*my_anchor }");
         let members = match doc.root.kind {
             MonValueKind::Object(m) => m,
             _ => panic!(),
@@ -779,7 +803,7 @@ mod tests {
 
     #[test]
     fn test_enum_definition() {
-        let doc = parse_ok(r#"{ Status: #enum { Active, Inactive } }"#);
+        let doc = parse_ok(r"{ Status: #enum { Active, Inactive } }");
         let members = match doc.root.kind {
             MonValueKind::Object(m) => m,
             _ => panic!(),
@@ -837,14 +861,14 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "This test is for visual confirmation and is ignored by default."]
     fn visual_conformation_from_golden() {
         let contents = fs::read_to_string("tests/ok/golden.mon").unwrap();
         let parsed = Parser::new_with_name(&contents, "test.mon".to_string())
             .unwrap()
             .parse_document();
 
-        print!("parsed: \n{}", pretty_result(parsed))
+        print!("parsed: \n{}", pretty_result(parsed));
     }
 
     #[test]
@@ -857,9 +881,9 @@ mod tests {
             let path = entry.path();
 
             if path.is_file() && path.extension().is_some_and(|ext| ext == "mon") {
-                println!("Parsing file: {:?}", path);
+                println!("Parsing file: {path:?}");
                 let source = fs::read_to_string(&path)
-                    .unwrap_or_else(|_| panic!("Failed to read file: {:?}", path));
+                    .unwrap_or_else(|_| panic!("Failed to read file: {path:?}"));
 
                 let mut parser = Parser::new_with_name(&source, path.to_str().unwrap().to_string())
                     .expect("Lexer failed");

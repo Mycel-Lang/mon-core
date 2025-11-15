@@ -20,6 +20,7 @@ pub struct Resolver {
 }
 
 impl Resolver {
+    #[must_use] 
     pub fn new() -> Self {
         Resolver {
             resolved_documents: HashMap::new(),
@@ -255,7 +256,7 @@ impl Resolver {
                     } else {
                         // Non-pair members (like TypeDefinition) are just added
                         // This might need refinement depending on how TypeDefinitions are handled after resolution
-                        final_members_map.insert(format!("{:?}", member), member);
+                        final_members_map.insert(format!("{member:?}"), member);
                         // Dummy key for now
                     }
                 }
@@ -492,7 +493,7 @@ impl Resolver {
                                 })
                                 .ok_or_else(|| {
                                     ResolverError::Validation(ValidationError::UndefinedType {
-                                        type_name: type_name.to_string(),
+                                        type_name: type_name.clone(),
                                         src: Arc::from(NamedSource::new(
                                             file_path.to_string_lossy(),
                                             source_text.to_string(),
@@ -590,7 +591,7 @@ impl Resolver {
                                                     return Err(ResolverError::Validation(
                                                         ValidationError::MissingField {
                                                             field_name: field_def.name.clone(),
-                                                            struct_name: type_name.to_string(),
+                                                            struct_name: type_name.clone(),
                                                             src: Arc::from(NamedSource::new(
                                                                 file_path.to_string_lossy(),
                                                                 source_text.to_string(),
@@ -602,20 +603,19 @@ impl Resolver {
                                                                 .into(),
                                                         },
                                                     ));
-                                                } else {
-                                                    // Field is missing, but has a default value.
-                                                    // We need to insert it into the object.
-                                                    if let Some(default_value) =
-                                                        &field_def.default_value
-                                                    {
-                                                        new_members.push(Member::Pair(
-                                                            crate::ast::Pair {
-                                                                key: field_def.name.clone(),
-                                                                value: default_value.clone(),
-                                                                validation: None,
-                                                            },
-                                                        ));
-                                                    }
+                                                }
+                                                // Field is missing, but has a default value.
+                                                // We need to insert it into the object.
+                                                if let Some(default_value) =
+                                                    &field_def.default_value
+                                                {
+                                                    new_members.push(Member::Pair(
+                                                        crate::ast::Pair {
+                                                            key: field_def.name.clone(),
+                                                            value: default_value.clone(),
+                                                            validation: None,
+                                                        },
+                                                    ));
                                                 }
                                             }
                                         }
@@ -632,7 +632,7 @@ impl Resolver {
                                                     return Err(ResolverError::Validation(
                                                         ValidationError::UnexpectedField {
                                                             field_name: pair.key.clone(),
-                                                            struct_name: type_name.to_string(),
+                                                            struct_name: type_name.clone(),
                                                             src: Arc::from(NamedSource::new(
                                                                 file_path.to_string_lossy(),
                                                                 source_text.to_string(),
@@ -651,7 +651,7 @@ impl Resolver {
                                         return Err(ResolverError::Validation(
                                             ValidationError::TypeMismatch {
                                                 field_name: field_name.to_string(),
-                                                expected_type: type_name.to_string(),
+                                                expected_type: type_name.clone(),
                                                 found_type: format!("{:?}", value.kind),
                                                 src: Arc::from(NamedSource::new(
                                                     file_path.to_string_lossy(),
@@ -677,8 +677,8 @@ impl Resolver {
                                             return Err(ResolverError::Validation(
                                                 ValidationError::TypeMismatch {
                                                     field_name: field_name.to_string(),
-                                                    expected_type: format!("enum '{}'", type_name),
-                                                    found_type: format!("enum '{}'", enum_name),
+                                                    expected_type: format!("enum '{type_name}'"),
+                                                    found_type: format!("enum '{enum_name}'"),
                                                     src: Arc::from(NamedSource::new(
                                                         file_path.to_string_lossy(),
                                                         source_text.to_string(),
@@ -695,7 +695,7 @@ impl Resolver {
                                             return Err(ResolverError::Validation(
                                                 ValidationError::UndefinedEnumVariant {
                                                     variant_name: variant_name.clone(),
-                                                    enum_name: type_name.to_string(),
+                                                    enum_name: type_name.clone(),
                                                     src: Arc::from(NamedSource::new(
                                                         file_path.to_string_lossy(),
                                                         source_text.to_string(),
@@ -712,7 +712,7 @@ impl Resolver {
                                         return Err(ResolverError::Validation(
                                             ValidationError::TypeMismatch {
                                                 field_name: field_name.to_string(),
-                                                expected_type: format!("enum '{}'", type_name),
+                                                expected_type: format!("enum '{type_name}'"),
                                                 found_type: format!("{:?}", value.kind),
                                                 src: Arc::from(NamedSource::new(
                                                     file_path.to_string_lossy(),
@@ -731,7 +731,7 @@ impl Resolver {
                         } else {
                             return Err(ResolverError::Validation(
                                 ValidationError::UndefinedType {
-                                    type_name: type_name.to_string(),
+                                    type_name: type_name.clone(),
                                     src: Arc::from(NamedSource::new(
                                         file_path.to_string_lossy(),
                                         source_text.to_string(),
@@ -984,7 +984,7 @@ mod tests {
             Ok(doc) => doc,
             Err(err) => {
                 let report = Report::from(err);
-                panic!("{:#}", report);
+                panic!("{report:#}");
             }
         }
     }
@@ -1003,7 +1003,7 @@ mod tests {
 
     #[test]
     fn test_simple_alias_resolution() {
-        let source = r#"{ &my_value: 123, alias_value: *my_value }"#;
+        let source = r"{ &my_value: 123, alias_value: *my_value }";
         let doc = resolve_ok(source, "test.mon");
 
         let root_object = match doc.root.kind {
@@ -1282,12 +1282,12 @@ mod tests {
 
     #[test]
     fn test_struct_validation_missing_required_field() {
-        let source = r#"
+        let source = r"
         {
             User: #struct { id(Number), name(String) },
             invalid_user :: User = { id: 3 },
         }
-    "#;
+    ";
         let err = resolve_err(source, "test_validation.mon");
         match err {
             crate::error::ResolverError::Validation(
@@ -1295,7 +1295,7 @@ mod tests {
             ) => {
                 assert_eq!(field_name, "name");
             }
-            _ => panic!("Expected MissingField error, but got {:?}", err),
+            _ => panic!("Expected MissingField error, but got {err:?}"),
         }
     }
 
@@ -1321,7 +1321,7 @@ mod tests {
                 assert_eq!(expected_type, "Number");
                 assert!(found_type.contains("String"));
             }
-            _ => panic!("Expected TypeMismatch error for id, but got {:?}", err),
+            _ => panic!("Expected TypeMismatch error for id, but got {err:?}"),
         }
     }
 
@@ -1340,7 +1340,7 @@ mod tests {
             ) => {
                 assert_eq!(field_name, "age");
             }
-            _ => panic!("Expected UnexpectedField error, but got {:?}", err),
+            _ => panic!("Expected UnexpectedField error, but got {err:?}"),
         }
     }
 
@@ -1366,7 +1366,7 @@ mod tests {
                 assert_eq!(expected_type, "String");
                 assert!(found_type.contains("Number"));
             }
-            _ => panic!("Expected TypeMismatch error for roles, but got {:?}", err),
+            _ => panic!("Expected TypeMismatch error for roles, but got {err:?}"),
         }
     }
 
@@ -1393,8 +1393,7 @@ mod tests {
                 assert!(found_type.contains("tuple with 1 elements"));
             }
             _ => panic!(
-                "Expected TypeMismatch error for permissions length, but got {:?}",
-                err
+                "Expected TypeMismatch error for permissions length, but got {err:?}"
             ),
         }
     }
@@ -1422,8 +1421,7 @@ mod tests {
                 assert!(found_type.contains("Number"));
             }
             _ => panic!(
-                "Expected TypeMismatch error for permissions types, but got {:?}",
-                err
+                "Expected TypeMismatch error for permissions types, but got {err:?}"
             ),
         }
     }
@@ -1451,20 +1449,19 @@ mod tests {
                 assert!(found_type.contains("Number"));
             }
             _ => panic!(
-                "Expected TypeMismatch error for log_data first type, but got {:?}",
-                err
+                "Expected TypeMismatch error for log_data first type, but got {err:?}"
             ),
         }
     }
 
     #[test]
     fn test_struct_validation_status_history_last_type_mismatch() {
-        let source = r#"
+        let source = r"
         {
             User: #struct { status_history([Boolean..., String]) },
             invalid_user :: User = { status_history: [true, 123] },
         }
-    "#;
+    ";
         let err = resolve_err(source, "test_validation.mon");
         match err {
             crate::error::ResolverError::Validation(
@@ -1480,8 +1477,7 @@ mod tests {
                 assert!(found_type.contains("Number"));
             }
             _ => panic!(
-                "Expected TypeMismatch error for status_history last type, but got {:?}",
-                err
+                "Expected TypeMismatch error for status_history last type, but got {err:?}"
             ),
         }
     }
@@ -1552,8 +1548,7 @@ mod tests {
                 assert!(found_type.contains("Number"));
             }
             _ => panic!(
-                "Expected TypeMismatch error for username, but got {:?}",
-                err
+                "Expected TypeMismatch error for username, but got {err:?}"
             ),
         }
     }
