@@ -249,7 +249,6 @@ impl Display for TypeSpec {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::analyze;
@@ -323,5 +322,4 @@ mod tests {
 
         assert_eq!(result, expected_yaml);
     }
-
 }

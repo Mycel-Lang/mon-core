@@ -1,4 +1,7 @@
-use crate::ast::{MonDocument, ImportStatement, MonValue, MonValueKind, Member, Pair, ImportSpec, ImportSpecifier, TypeDefinition, TypeDef, StructDef, FieldDef, EnumDef, TypeSpec};
+use crate::ast::{
+    EnumDef, FieldDef, ImportSpec, ImportSpecifier, ImportStatement, Member, MonDocument, MonValue,
+    MonValueKind, Pair, StructDef, TypeDef, TypeDefinition, TypeSpec,
+};
 use crate::error::{MonError, ParserError};
 use crate::lexer::{Lexer, Token, TokenType};
 use miette::{GraphicalReportHandler, NamedSource, Report};

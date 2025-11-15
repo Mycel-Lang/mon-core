@@ -32,6 +32,9 @@ pub(crate) fn to_value(mon_value: &MonValue) -> Value {
         }
         // Aliases, Spreads, etc., should be resolved by this point.
         // If we encounter them here, it's a logic error in the resolver.
-        MonValueKind::Null | MonValueKind::Alias(_) | MonValueKind::EnumValue { .. } | MonValueKind::ArraySpread(_) => Value::Null, // Or panic, depending on desired strictness.
+        MonValueKind::Null
+        | MonValueKind::Alias(_)
+        | MonValueKind::EnumValue { .. }
+        | MonValueKind::ArraySpread(_) => Value::Null, // Or panic, depending on desired strictness.
     }
 }

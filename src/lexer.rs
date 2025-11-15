@@ -81,7 +81,7 @@ pub struct Token {
 }
 
 impl Token {
-    #[must_use] 
+    #[must_use]
     pub fn new(ttype: TokenType, pos_start: usize, pos_end: usize) -> Token {
         Token {
             ttype,
@@ -97,7 +97,7 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    #[must_use] 
+    #[must_use]
     pub fn new(input: &'a str) -> Self {
         Self {
             chars: input.chars().peekable(),

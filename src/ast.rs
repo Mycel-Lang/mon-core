@@ -22,7 +22,7 @@ pub struct MonValue {
 
 impl MonValue {
     /// Returns the source span of the value, which can be used for error reporting.
-    #[must_use] 
+    #[must_use]
     pub fn get_source_span(&self) -> SourceSpan {
         SourceSpan::new(self.pos_start.into(), self.pos_end - self.pos_start)
     }
@@ -137,7 +137,7 @@ pub enum TypeDef {
 
 impl TypeDef {
     /// Returns the source span of the entire type definition.
-    #[must_use] 
+    #[must_use]
     pub fn get_span(&self) -> SourceSpan {
         match self {
             TypeDef::Struct(s) => (s.pos_start, s.pos_end - s.pos_start).into(),
@@ -191,7 +191,7 @@ pub enum TypeSpec {
 }
 
 impl TypeSpec {
-    #[must_use] 
+    #[must_use]
     pub fn get_span(&self) -> SourceSpan {
         match self {
             TypeSpec::Simple(_, span)
@@ -221,7 +221,7 @@ pub struct SymbolTable {
 
 impl SymbolTable {
     /// Creates a new, empty symbol table.
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -283,7 +283,7 @@ impl Display for MonValue {
 
 impl Pair {
     #[track_caller]
-    #[must_use] 
+    #[must_use]
     pub fn get_span(&self) -> SourceSpan {
         match &self.validation {
             None => {

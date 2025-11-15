@@ -4,7 +4,6 @@
 [![Crates.io](https://img.shields.io/crates/v/mon-core.svg)](https://crates.io/crates/mon-core)
 [![Docs.rs](https://docs.rs/mon-core/badge.svg)](https://docs.rs/mon-core)
 [![License](https://img.shields.io/crates/l/mon-core.svg)](./LICENSE)
-[![CI](https://github.com/mycel-lang/mon/actions/workflows/rust.yml/badge.svg)](https://github.com/mycel-lang/mon/actions/workflows/rust.yml)
 
 `mon-core` is the reference Rust implementation of the **MON (Mycel Object Notation)** language — a human-focused configuration and data format designed to be readable, safe, and predictable.
 

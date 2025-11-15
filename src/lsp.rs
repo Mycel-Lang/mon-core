@@ -297,10 +297,10 @@ fn generate_semantic_tokens_for_type_spec(type_spec: &TypeSpec, tokens: &mut Vec
 #[cfg(all(test, feature = "lsp"))]
 mod tests {
     use super::*;
+    use crate::analyze;
     use crate::ast::{EnumDef, Member, MonValue, MonValueKind, Pair, TypeDef, TypeSpec};
     use miette::SourceSpan;
     use std::collections::HashMap;
-    use crate::analyze;
 
     fn make_simple_value(start: usize, end: usize) -> MonValue {
         MonValue {
@@ -633,5 +633,4 @@ mod tests {
         assert_eq!(references[0].offset(), first_usage_pos);
         assert_eq!(references[1].offset(), second_usage_pos);
     }
-
 }

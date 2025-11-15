@@ -20,7 +20,7 @@ pub struct Resolver {
 }
 
 impl Resolver {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Resolver {
             resolved_documents: HashMap::new(),
@@ -1392,9 +1392,7 @@ mod tests {
                 assert!(expected_type.contains("tuple with 2 elements"));
                 assert!(found_type.contains("tuple with 1 elements"));
             }
-            _ => panic!(
-                "Expected TypeMismatch error for permissions length, but got {err:?}"
-            ),
+            _ => panic!("Expected TypeMismatch error for permissions length, but got {err:?}"),
         }
     }
 
@@ -1420,9 +1418,7 @@ mod tests {
                 assert_eq!(expected_type, "String");
                 assert!(found_type.contains("Number"));
             }
-            _ => panic!(
-                "Expected TypeMismatch error for permissions types, but got {err:?}"
-            ),
+            _ => panic!("Expected TypeMismatch error for permissions types, but got {err:?}"),
         }
     }
 
@@ -1448,9 +1444,7 @@ mod tests {
                 assert_eq!(expected_type, "String");
                 assert!(found_type.contains("Number"));
             }
-            _ => panic!(
-                "Expected TypeMismatch error for log_data first type, but got {err:?}"
-            ),
+            _ => panic!("Expected TypeMismatch error for log_data first type, but got {err:?}"),
         }
     }
 
@@ -1476,9 +1470,9 @@ mod tests {
                 assert_eq!(expected_type, "String");
                 assert!(found_type.contains("Number"));
             }
-            _ => panic!(
-                "Expected TypeMismatch error for status_history last type, but got {err:?}"
-            ),
+            _ => {
+                panic!("Expected TypeMismatch error for status_history last type, but got {err:?}")
+            }
         }
     }
 
@@ -1547,9 +1541,7 @@ mod tests {
                 assert_eq!(expected_type, "String");
                 assert!(found_type.contains("Number"));
             }
-            _ => panic!(
-                "Expected TypeMismatch error for username, but got {err:?}"
-            ),
+            _ => panic!("Expected TypeMismatch error for username, but got {err:?}"),
         }
     }
 
