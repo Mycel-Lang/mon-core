@@ -9,6 +9,8 @@
 
 This crate provides the parser, analyzer, validator, and core data model used by MON-based tooling, servers, CLIs, and compilers.
 
+> for more information please look at out website: www.mycel-lang.org 
+
 ---
 
 ## Table of Contents
@@ -182,4 +184,9 @@ Documentation lives in `docs/`. Any language or spec changes must be reflected t
 Licensed under the MIT license.
 See [`LICENSE`](./LICENSE) for details.
 
+
 ---
+> for more information please look at out website: www.mycel-lang.org
+
+
+Made with ❤️ 
