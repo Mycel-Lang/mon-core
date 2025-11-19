@@ -1,66 +1,22 @@
+name: Rust
 
-name: "Build & Test"
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
 
-on: [push, pull_request]
-
-concurrency:
-  group: ci-${{ github.ref_name }}
-  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+  build:
 
-    env:
-      CARGO_TERM_COLOR: always
-      SCCACHE_DIR: ${{ runner.temp }}/sccache
-      SCCACHE_CACHE_SIZE: 10G
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Rust setup (install toolchain & CI tools)
-        uses: ./.github/actions/rust-setup
-
-      - name: Cache sccache
-        uses: actions/cache@v3
-        with:
-          path: ${{ env.SCCACHE_DIR }}
-          key: sccache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: sccache-${{ runner.os }}-
-
-      - name: Prepare cargo-chef recipe
-        run: cargo chef prepare --recipe-path recipe.json
-
-      - name: Cook dependencies (cargo-chef)
-        run: cargo chef cook --recipe-path recipe.json --features lsp
-
-      - name: Build (debug) – workspace, all targets
-        run: cargo build --workspace --all-targets --features lsp --locked --verbose
-
-      - name: Build examples
-        run: cargo build --examples --locked
-
-      - name: Test
-        run: cargo test --workspace --all-targets --locked --verbose
-
-      - name: Upload build outputs (optional)
-        if: always()
-        run: |
-          mkdir -p ci-artifacts
-          tar -czf ci-artifacts/target-debug.tar.gz target/debug || true
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: ci-artifacts
-
-      - name: Show sccache stats
-        if: always()
-        run: sccache --show-stats || true
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --all-tests
