@@ -128,7 +128,7 @@ MON is designed to fail loudly **and** helpfully.
 
 Example error (format depends on your terminal capabilities):
 
-```
+```bash
 error[E0012]: expected Number, got String
   --> config.mon:7:12
    |
