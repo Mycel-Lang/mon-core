@@ -20,8 +20,5 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Rust setup (install toolchain & CI tools)
-        uses: ./.github/actions/rust-setup
-
       - name: Run cargo-audit
         run: cargo audit --deny warnings
