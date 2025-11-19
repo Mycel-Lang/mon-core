@@ -72,7 +72,6 @@ impl<'a> Parser<'a> {
         while self.check(&TokenType::Import) {
             let imp = self.parse_import_statement()?;
             imports.push(imp);
-            // DON'T call self.advance() here — parse_import_statement already advances
         }
 
         // After imports, we expect the root object.
@@ -563,19 +562,34 @@ impl<'a> Parser<'a> {
     fn parse_enum_value(&mut self) -> Result<MonValue, MonError> {
         let start_token = self.current_token()?.clone();
         self.expect(&TokenType::Dollar)?;
-        let enum_name = self.parse_key()?;
+
+        // parse enum name as a single Identifier
+        let enum_token = self.current_token()?.clone();
+        let enum_name = if let TokenType::Identifier(s) = &enum_token.ttype {
+            let s = s.clone();
+            self.advance();
+            s
+        } else {
+            return self.err_unexpected("an identifier for enum name");
+        };
+
         self.expect(&TokenType::Dot)?;
-        let variant_name = self.parse_key()?;
-        let end_token = self.current_token_before_advance()?.clone(); // End of the variant_name
+
+        // parse variant name as a single Identifier
+        let variant_token = self.current_token()?.clone();
+        let variant_name = if let TokenType::Identifier(s) = &variant_token.ttype {
+            let s = s.clone();
+            self.advance();
+            s
+        } else {
+            return self.err_unexpected("an identifier for enum variant");
+        };
 
         Ok(MonValue {
-            kind: MonValueKind::EnumValue {
-                enum_name,
-                variant_name,
-            },
+            kind: MonValueKind::EnumValue { enum_name, variant_name },
             anchor: None,
             pos_start: start_token.pos_start,
-            pos_end: end_token.pos_end,
+            pos_end: variant_token.pos_end,
         })
     }
 
