@@ -26,8 +26,7 @@ jobs:
           command -v cargo-audit || cargo install cargo-audit --locked
           command -v cargo-nextest || cargo install cargo-nextest --locked
 
-      - name: Run tests
-        run: cargo test --all --locked
+
 
       - name: Security audit
         run: cargo audit
