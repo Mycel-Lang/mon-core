@@ -1,0 +1,40 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+    # Allow manual runs
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run benchmarks
+        run: cargo bench --bench mon_benchmarks -- --output-format bencher | tee output.txt
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: "cargo"
+          output-file-path: output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Auto-push to gh-pages (only hosts benchmarks, nothing else)
+          auto-push: true
+          # Alert on 200% regression
+          alert-threshold: "200%"
+          comment-on-alert: true
+          fail-on-alert: false

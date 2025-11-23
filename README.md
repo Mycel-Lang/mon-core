@@ -1,28 +1,30 @@
+# MON-Core
 
-# MON Core (`mon-core`)
-
+[![CI](https://github.com/Mycel-Lang/mon-core/workflows/CI/badge.svg)](https://github.com/Mycel-Lang/mon-core/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/mon-core.svg)](https://crates.io/crates/mon-core)
-[![Docs.rs](https://docs.rs/mon-core/badge.svg)](https://docs.rs/mon-core)
-[![License](https://img.shields.io/crates/l/mon-core.svg)](./LICENSE)
+[![Documentation](https://docs.rs/mon-core/badge.svg)](https://docs.rs/mon-core)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Rust Version](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
+
 
 `mon-core` is the reference Rust implementation of the **MON (Mycel Object Notation)** language — a human-focused configuration and data format designed to be readable, safe, and predictable.
 
 This crate provides the parser, analyzer, validator, and core data model used by MON-based tooling, servers, CLIs, and compilers.
 
-> for more information please look at out website: www.mycel-lang.org 
+> for more information please look at out website: www.mycel-lang.org
 
 ---
 
 ## Table of Contents
 
-* [Overview](#overview)
-* [Features](#features)
-* [Example](#example)
-* [Rust Quick Start](#rust-quick-start)
-* [Error Handling](#error-handling)
-* [Development](#development)
-* [Roadmap](#roadmap)
-* [License](#license)
+- [Overview](#overview)
+- [Features](#features)
+- [Example](#example)
+- [Rust Quick Start](#rust-quick-start)
+- [Error Handling](#error-handling)
+- [Development](#development)
+- [Roadmap](#roadmap)
+- [License](#license)
 
 ---
 
@@ -32,25 +34,24 @@ MON aims to replace overly rigid formats (JSON) and overly permissive ones (YAML
 
 `mon-core` implements:
 
-* A forgiving parser with clear, context-rich error messages
-* A semantic analyzer with anchor/alias resolution
-* Type checking via `#struct`, `#enum`, and validated bindings
-* An internal IR suitable for compilers and higher-level tooling
+- A forgiving parser with clear, context-rich error messages
+- A semantic analyzer with anchor/alias resolution
+- Type checking via `#struct`, `#enum`, and validated bindings
+- An internal IR suitable for compilers and higher-level tooling
 
 If you want to embed MON into your Rust application or build tooling around the language, this is the crate.
 
-For more information about mon [docs](docs/01_the_basic_structure.md) are here :D
----
+## For more information about mon [docs](docs/01_the_basic_structure.md) are here :D
 
 ## Features
 
-* **Clean syntax:** unquoted keys, comments, trailing commas
-* **Human-friendly booleans:** `on` / `off` as well as `true` / `false`
-* **Anchors & aliases:** safe reuse with explicit copy semantics (`&name`, `*name`)
-* **Deep merges:** `...*anchor` for structured overrides
-* **Types built in:** `#struct`, `#enum`, and `::` for validation
-* **Modular imports:** `import { A, B } from "./file.mon"`
-* **Detailed errors:** location-aware, colorized, actionable
+- **Clean syntax:** unquoted keys, comments, trailing commas
+- **Human-friendly booleans:** `on` / `off` as well as `true` / `false`
+- **Anchors & aliases:** safe reuse with explicit copy semantics (`&name`, `*name`)
+- **Deep merges:** `...*anchor` for structured overrides
+- **Types built in:** `#struct`, `#enum`, and `::` for validation
+- **Modular imports:** `import { A, B } from "./file.mon"`
+- **Detailed errors:** location-aware, colorized, actionable
 
 ---
 
@@ -138,9 +139,9 @@ error[E0012]: expected Number, got String
 
 Errors include:
 
-* the source span
-* the inferred and expected types
-* suggestions when applicable
+- the source span
+- the inferred and expected types
+- suggestions when applicable
 
 ---
 
@@ -171,11 +172,11 @@ Documentation lives in `docs/`. Any language or spec changes must be reflected t
 
 ## Roadmap
 
-* Improved parser recovery modes
-* Type system stabilization
-* Performance pass on alias/anchor resolution
-* Better import graph validation
-* Tooling support (formatter, LSP)
+- Improved parser recovery modes
+- Type system stabilization
+- Performance pass on alias/anchor resolution
+- Better import graph validation
+- Tooling support (formatter, LSP)
 
 ---
 
@@ -184,9 +185,8 @@ Documentation lives in `docs/`. Any language or spec changes must be reflected t
 Licensed under the MIT license.
 See [`LICENSE`](./LICENSE) for details.
 
-
 ---
+
 > for more information please look at out website: www.mycel-lang.org
 
-
-Made with ❤️ 
+Made with ❤️

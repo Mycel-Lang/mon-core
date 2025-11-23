@@ -1,3 +1,61 @@
+//! # MON Parser
+//!
+//! This module provides the `Parser` for the MON language. Its primary responsibility
+//! is to transform a linear sequence of tokens from the [`lexer`](crate::lexer) into a
+//! hierarchical Abstract Syntax Tree (AST), as defined in the [`ast`](crate::ast) module.
+//!
+//! ## Architectural Overview
+//!
+//! The `Parser` is a recursive descent parser. This parsing strategy uses a set of mutually
+//! recursive functions to process the token stream, with each function typically corresponding
+//! to a non-terminal symbol in the MON grammar. For example, `parse_object()`, `parse_array()`,
+//! and `parse_member()` each handle a specific part of the language syntax.
+//!
+//! The parser's entry point is [`Parser::parse_document`], which orchestrates the parsing of
+//! the entire document, including any top-level import statements and the root object.
+//!
+//! The parser does **not** perform semantic validation. It only checks for syntactic
+//! correctness. For example, it will successfully parse `value: *non_existent_anchor`, but the
+//! [`resolver`](crate::resolver) will later flag an error because the anchor does not exist.
+//!
+//! ## Use Cases
+//!
+//! Direct interaction with the parser is less common than using the top-level [`analyze`](crate::api::analyze)
+//! function. However, it can be useful for:
+//!
+//! - **Syntax Tree Inspection:** Building tools that need to analyze the raw structure of a MON
+//!   file without performing full semantic analysis.
+//! - **Custom Analysis Pipelines:** Creating a custom analysis process where the AST needs to be
+//!   inspected or transformed before being passed to the resolver.
+//!
+//! ## Example: Direct Parser Usage
+//!
+//! ```rust
+//! use mon_core::parser::Parser;
+//! use mon_core::error::MonError;
+//!
+//! # fn main() -> Result<(), MonError> {
+//! let source = r#"
+//! {
+//!     // This is a syntactically correct MON file.
+//!     key: "value",
+//!     nested: { flag: on }
+//! }
+//! "#;
+//!
+//! // 1. Create a new parser for the source code.
+//! let mut parser = Parser::new_with_name(source, "my_file.mon".to_string())?;
+//!
+//! // 2. Parse the source into a document (AST).
+//! let document = parser.parse_document()?;
+//!
+//! // The `document` can now be inspected.
+//! assert!(document.imports.is_empty());
+//! // Further processing would be needed to make sense of the values.
+//!
+//! # Ok(())
+//! # }
+//! ```
 use crate::ast::{
     EnumDef, FieldDef, ImportSpec, ImportSpecifier, ImportStatement, Member, MonDocument, MonValue,
     MonValueKind, Pair, StructDef, TypeDef, TypeDefinition, TypeSpec,
@@ -8,7 +66,46 @@ use miette::{GraphicalReportHandler, NamedSource, Report};
 use std::panic::Location;
 use std::sync::Arc;
 
-/// A recursive descent parser for the MON language, built according to the EBNF grammar.
+/// A recursive descent parser for the MON language.
+///
+/// The `Parser` takes a stream of tokens from a [`Lexer`] and produces an
+/// Abstract Syntax Tree (AST), represented by a [`MonDocument`]. It is responsible
+/// for enforcing the grammatical structure of the MON language but does not perform
+/// semantic analysis like validation or alias resolution (see [`crate::resolver::Resolver`]).
+///
+/// The main entry point is [`Parser::parse_document`], which parses the entire source.
+///
+/// # Example: How to use the Parser
+///
+/// You can use the `Parser` directly to get the raw AST of a MON file.
+///
+/// ```rust
+/// use mon_core::parser::Parser;
+/// use mon_core::error::MonError;
+///
+/// # fn main() -> Result<(), MonError> {
+/// let source = r#"
+/// import { MyType } from "./types.mon"
+///
+/// {
+///     &my_anchor: { a: 1 },
+///     value :: MyType = *my_anchor
+/// }
+/// "#;
+///
+/// // 1. Create a new parser for the source code.
+/// let mut parser = Parser::new_with_name(source, "my_file.mon".to_string())?;
+///
+/// // 2. Parse the source into a document.
+/// let document = parser.parse_document()?;
+///
+/// // The `document` now contains the raw AST, including imports and the unresolved root object.
+/// assert_eq!(document.imports.len(), 1);
+/// // Further processing would be needed by the resolver to handle the alias and validation.
+///
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct Parser<'a> {
     source: Arc<NamedSource<String>>,
@@ -20,27 +117,31 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     /// Creates a new `Parser` instance with a default file name "source.mon".
     ///
+    /// This is a convenience method that calls [`Parser::new_with_name`].
+    ///
     /// # Arguments
     ///
     /// * `source_text` - The MON source code as a string.
     ///
     /// # Errors
     ///
-    /// Returns a `MonError` if lexing the source text fails.
+    /// Returns a [`MonError`] if lexing the source text fails.
     pub fn new(source_text: &'a str) -> Result<Self, MonError> {
         Self::new_with_name(source_text, "source.mon".to_string())
     }
 
     /// Creates a new `Parser` instance with a specified file name.
     ///
+    /// The parser initializes a [`Lexer`] and filters out whitespace and comments.
+    ///
     /// # Arguments
     ///
     /// * `source_text` - The MON source code as a string.
-    /// * `name` - The name of the file being parsed (used for error reporting).
+    /// * `name` - The name of the file being parsed, used for error reporting.
     ///
     /// # Errors
     ///
-    /// Returns a `MonError` if lexing the source text fails.
+    /// Returns a [`MonError`] if lexing the source text fails.
     pub fn new_with_name(source_text: &'a str, name: String) -> Result<Self, MonError> {
         let source = Arc::new(NamedSource::new(name, source_text.to_string()));
         let mut lexer = Lexer::new(source_text);
@@ -60,11 +161,14 @@ impl<'a> Parser<'a> {
 
     // === Main Parsing Methods ===
 
-    /// Parses the entire MON document, including import statements and the root object.
+    /// Parses the entire MON source into a [`MonDocument`].
+    ///
+    /// This method parses import statements first, followed by the root object,
+    /// and ensures no unexpected tokens are left at the end of the file.
     ///
     /// # Errors
     ///
-    /// Returns a `MonError` if parsing fails at any point.
+    /// Returns a [`MonError`] if parsing fails at any point.
     pub fn parse_document(&mut self) -> Result<MonDocument, MonError> {
         let mut imports: Vec<ImportStatement> = Vec::new();
 
@@ -341,7 +445,7 @@ impl<'a> Parser<'a> {
             Ok(name)
         } else {
             // This should be unreachable if parse_alias is correct
-            self.err_unexpected("an alias after '...'")
+            self.err_unexpected("an alias after '...' ")
         }
     }
 
@@ -586,7 +690,10 @@ impl<'a> Parser<'a> {
         };
 
         Ok(MonValue {
-            kind: MonValueKind::EnumValue { enum_name, variant_name },
+            kind: MonValueKind::EnumValue {
+                enum_name,
+                variant_name,
+            },
             anchor: None,
             pos_start: start_token.pos_start,
             pos_end: variant_token.pos_end,
@@ -671,7 +778,7 @@ impl<'a> Parser<'a> {
 
     #[track_caller]
     fn err_unexpected<T>(&self, expected: &str) -> Result<T, MonError> {
-        let token = self.current_token()?; // Should be safe if we got here
+        let token = self.current_token()?;
         print!("caller: {}", Location::caller());
         Err(ParserError::UnexpectedToken {
             src: (*self.source).clone().into(),
@@ -702,7 +809,37 @@ fn pretty_result(out: Result<MonDocument, MonError>) -> String {
 mod tests {
     use super::*;
     use miette::Report;
-    use std::fs;
+
+    impl Member {
+        fn unwrap_pair(self) -> Pair {
+            match self {
+                Member::Pair(p) => p,
+                _ => panic!("Expected Pair, got {self:?}"),
+            }
+        }
+        fn unwrap_type_definition(self) -> TypeDefinition {
+            match self {
+                Member::TypeDefinition(td) => td,
+                _ => panic!("Expected TypeDefinition, got {self:?}"),
+            }
+        }
+    }
+
+    impl MonValueKind {
+        fn unwrap_object(self) -> Vec<Member> {
+            match self {
+                MonValueKind::Object(m) => m,
+                _ => panic!("Expected Object, got {self:?}"),
+            }
+        }
+        #[allow(dead_code)]
+        fn unwrap_array(self) -> Vec<MonValue> {
+            match self {
+                MonValueKind::Array(v) => v,
+                _ => panic!("Expected Array, got {self:?}"),
+            }
+        }
+    }
 
     fn parse_ok(source: &str) -> MonDocument {
         let mut parser = Parser::new_with_name(source, "test.mon".to_string()).unwrap();
@@ -710,9 +847,7 @@ mod tests {
             Ok(doc) => doc,
             Err(err) => {
                 let report = Report::from(err);
-                print!("{report:?}");
-
-                panic!("{report:#}");
+                panic!("Parsing failed when it should have succeeded:\n{report:?}");
             }
         }
     }
@@ -742,7 +877,7 @@ mod tests {
 
     #[test]
     fn test_anchor_and_alias() {
-        let doc = parse_ok(r"{ &anchor1 : 123, key2: *anchor1 }");
+        let doc = parse_ok(r#"{ &anchor1 : 123, key2: *anchor1 }"#);
         let members = match doc.root.kind {
             MonValueKind::Object(m) => m,
             _ => panic!(),
@@ -766,7 +901,7 @@ mod tests {
 
     #[test]
     fn test_spread() {
-        let doc = parse_ok(r"{ ...*my_anchor }");
+        let doc = parse_ok(r#"{ ...*my_anchor }"#);
         let members = match doc.root.kind {
             MonValueKind::Object(m) => m,
             _ => panic!(),
@@ -780,135 +915,253 @@ mod tests {
 
     #[test]
     fn test_namespace_import() {
-        let doc = parse_ok(r#"import * as my_schemas from "./schemas.mon" {}"#);
+        let doc = parse_ok(
+            r###"import * as schemas from "./schemas.mon"
+{
+    a: 1
+}"###,
+        );
+        assert!(!doc.imports.is_empty());
+        match &doc.imports[0].spec {
+            ImportSpec::Namespace(name) => assert_eq!(name, "schemas"),
+            _ => panic!("Expected namespace import"),
+        }
+    }
+
+    #[test]
+    fn test_trailing_comma_in_object() {
+        let doc = parse_ok("{ a: 1, b: 2, }");
+        let members = match doc.root.kind {
+            MonValueKind::Object(m) => m,
+            _ => panic!(),
+        };
+        assert_eq!(members.len(), 2);
+    }
+
+    #[test]
+    fn test_trailing_comma_in_array() {
+        let doc = parse_ok("{arr: [ 1, 2, ]}");
+        let members = doc.root.kind.unwrap_object();
+        let pair = members[0].clone().unwrap_pair();
+        let values = match pair.value.kind {
+            MonValueKind::Array(v) => v,
+            _ => panic!("Expected Array"),
+        };
+        assert_eq!(values.len(), 2);
+    }
+
+    #[test]
+    fn test_array_with_spread() {
+        let doc = parse_ok("{arr: [ 1, ...*other, 3 ]}");
+        let members = doc.root.kind.unwrap_object();
+        let pair = members[0].clone().unwrap_pair();
+        let values = match pair.value.kind {
+            MonValueKind::Array(v) => v,
+            _ => panic!("Expected Array"),
+        };
+        assert_eq!(values.len(), 3);
+        assert!(matches!(values[0].kind, MonValueKind::Number(_)));
+        assert!(matches!(values[1].kind, MonValueKind::ArraySpread(_)));
+        assert!(matches!(values[2].kind, MonValueKind::Number(_)));
+    }
+
+    #[test]
+    fn test_all_value_types() {
+        let doc = parse_ok(
+            r#"{ 
+            s: "string",
+            n: 123.45,
+            b1: true,
+            b2: false,
+            nu: null,
+            obj: {},
+            arr: [],
+            alias: *somewhere,
+            enum_val: $MyEnum.Variant
+        }"#,
+        );
+        let members = match doc.root.kind {
+            MonValueKind::Object(m) => m,
+            _ => panic!(),
+        };
+        assert_eq!(members.len(), 9);
+        assert!(matches!(
+            members[0].clone().unwrap_pair().value.kind,
+            MonValueKind::String(_)
+        ));
+        assert!(matches!(
+            members[1].clone().unwrap_pair().value.kind,
+            MonValueKind::Number(_)
+        ));
+        assert!(matches!(
+            members[2].clone().unwrap_pair().value.kind,
+            MonValueKind::Boolean(true)
+        ));
+        assert!(matches!(
+            members[3].clone().unwrap_pair().value.kind,
+            MonValueKind::Boolean(false)
+        ));
+        assert!(matches!(
+            members[4].clone().unwrap_pair().value.kind,
+            MonValueKind::Null
+        ));
+        assert!(matches!(
+            members[5].clone().unwrap_pair().value.kind,
+            MonValueKind::Object(_)
+        ));
+        assert!(matches!(
+            members[6].clone().unwrap_pair().value.kind,
+            MonValueKind::Array(_)
+        ));
+        assert!(matches!(
+            members[7].clone().unwrap_pair().value.kind,
+            MonValueKind::Alias(_)
+        ));
+        assert!(matches!(
+            members[8].clone().unwrap_pair().value.kind,
+            MonValueKind::EnumValue { .. }
+        ));
+    }
+
+    #[test]
+    fn test_dotted_key() {
+        let doc = parse_ok(r#"{ a.b.c: 1 }"#);
+        let pair = doc.root.kind.unwrap_object().remove(0).unwrap_pair();
+        assert_eq!(pair.key, "a.b.c");
+    }
+
+    #[test]
+    fn test_string_key() {
+        let doc = parse_ok(r#"{ "a-b-c": 1 }"#);
+        let pair = doc.root.kind.unwrap_object().remove(0).unwrap_pair();
+        assert_eq!(pair.key, "a-b-c");
+    }
+
+    #[test]
+    fn test_pair_with_equals() {
+        let doc = parse_ok(r#"{ key = 1 }"#);
+        let pair = doc.root.kind.unwrap_object().remove(0).unwrap_pair();
+        assert_eq!(pair.key, "key");
+        assert!(matches!(pair.value.kind, MonValueKind::Number(_)));
+    }
+
+    #[test]
+    fn test_named_imports() {
+        let doc = parse_ok(
+            r#"import { A, &B, C } from "./types.mon"
+{
+    x: 1
+}"#,
+        );
+        assert!(!doc.imports.is_empty());
+        match &doc.imports[0].spec {
+            ImportSpec::Named(specifiers) => {
+                assert_eq!(specifiers.len(), 3);
+                assert_eq!(specifiers[0].name, "A");
+                assert!(!specifiers[0].is_anchor);
+                assert_eq!(specifiers[1].name, "B");
+                assert!(specifiers[1].is_anchor);
+                assert_eq!(specifiers[2].name, "C");
+                assert!(!specifiers[2].is_anchor);
+            }
+            _ => panic!("Expected named import"),
+        }
+    }
+
+    #[test]
+    fn test_struct_type_definition() {
+        let doc = parse_ok(
+            r#"{
+User: #struct {
+    name(String),
+    age(Number) = 30,
+}
+}"#,
+        );
+        let members = doc.root.kind.unwrap_object();
+        let td = members[0].clone().unwrap_type_definition();
+        match td.def_type {
+            TypeDef::Struct(s) => {
+                assert_eq!(s.fields.len(), 2);
+                assert_eq!(s.fields[0].name, "name");
+                assert!(s.fields[0].default_value.is_none());
+                assert_eq!(s.fields[1].name, "age");
+                assert!(s.fields[1].default_value.is_some());
+            }
+            _ => panic!("Expected struct definition"),
+        }
+    }
+
+    #[test]
+    fn test_enum_type_definition() {
+        let doc = parse_ok(
+            r#"{
+Status: #enum { Active, Inactive, Pending }
+}"#,
+        );
+        let members = doc.root.kind.unwrap_object();
+        let td = members[0].clone().unwrap_type_definition();
+        match td.def_type {
+            TypeDef::Enum(e) => {
+                assert_eq!(e.variants, vec!["Active", "Inactive", "Pending"]);
+            }
+            _ => panic!("Expected enum definition"),
+        }
+    }
+
+    #[test]
+    fn test_validation_on_pair() {
+        let doc = parse_ok(r#"{ key :: Number = 42 }"#);
+        let pair = doc.root.kind.unwrap_object().remove(0).unwrap_pair();
+
+        //                                                              should have been 69
+        assert_eq!(
+            pair.validation.unwrap(),
+            TypeSpec::Simple("Number".into(), (9, 6).into())
+        )
+    }
+
+    #[test]
+    fn test_nested_objects_and_arrays() {
+        let doc = parse_ok(r#"{ obj: { a: 1, b: 2 }, arr: [1, 2, 3] }"#);
+        let members = doc.root.kind.unwrap_object();
+        let obj_val = members[0].clone().unwrap_pair().value;
+        assert!(matches!(obj_val.kind, MonValueKind::Object(_)));
+        let arr_val = members[1].clone().unwrap_pair().value;
+        assert!(matches!(arr_val.kind, MonValueKind::Array(_)));
+    }
+
+    #[test]
+    fn test_enum_value_in_object() {
+        let doc = parse_ok(r#"{ status: $Status.Active }"#);
+        let pair = doc.root.kind.unwrap_object().remove(0).unwrap_pair();
+        match pair.value.kind {
+            MonValueKind::EnumValue {
+                enum_name,
+                variant_name,
+            } => {
+                assert_eq!(enum_name, "Status");
+                assert_eq!(variant_name, "Active");
+            }
+            _ => panic!("Expected enum value"),
+        }
+    }
+
+    #[test]
+    fn test_complex_document() {
+        let doc = parse_ok(
+            r#"
+import { &A, B } from "./types.mon"
+
+{
+    &anchor1: { x: 1 },
+    key2: *anchor1,
+    list: [1, 2, 3, ...*B],
+    status: $Status.Active
+}"#,
+        );
         assert_eq!(doc.imports.len(), 1);
-        let i = &doc.imports[0];
-        assert_eq!(i.path, "./schemas.mon");
-        assert!(matches!(i.spec, ImportSpec::Namespace(ref s) if s == "my_schemas"));
-
-        // Root object should be empty
-        let members = match doc.root.kind {
-            MonValueKind::Object(m) => m,
-            _ => panic!("Root was not an object"),
-        };
-        assert!(members.is_empty());
-    }
-
-    #[test]
-    fn test_named_import() {
-        let doc = parse_ok(r#"import { User, &Template } from "./file.mon" {}"#);
-        assert_eq!(doc.imports.len(), 1);
-        let i = &doc.imports[0];
-        assert_eq!(i.path, "./file.mon");
-        match &i.spec {
-            ImportSpec::Named(specs) => {
-                assert_eq!(specs.len(), 2);
-                assert_eq!(specs[0].name, "User");
-                assert!(!specs[0].is_anchor);
-                assert_eq!(specs[1].name, "Template");
-                assert!(specs[1].is_anchor);
-            }
-            _ => panic!(),
-        }
-        // Root object should be empty
-        let members = match doc.root.kind {
-            MonValueKind::Object(m) => m,
-            _ => panic!("Root was not an object"),
-        };
-        assert!(members.is_empty());
-    }
-
-    #[test]
-    fn test_enum_definition() {
-        let doc = parse_ok(r"{ Status: #enum { Active, Inactive } }");
-        let members = match doc.root.kind {
-            MonValueKind::Object(m) => m,
-            _ => panic!(),
-        };
-        assert_eq!(members.len(), 1);
-        match &members[0] {
-            Member::TypeDefinition(t) => {
-                assert_eq!(t.name, "Status");
-                assert!(matches!(t.def_type, TypeDef::Enum(_)));
-            }
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    fn test_struct_definition() {
-        let doc = parse_ok(r#"{ User: #struct { id(Number), name(String) = "Guest" } }"#);
-        let members = match doc.root.kind {
-            MonValueKind::Object(m) => m,
-            _ => panic!(),
-        };
-        assert_eq!(members.len(), 1);
-        match &members[0] {
-            Member::TypeDefinition(t) => {
-                assert_eq!(t.name, "User");
-                match &t.def_type {
-                    TypeDef::Struct(s) => {
-                        assert_eq!(s.fields.len(), 2);
-                        assert_eq!(s.fields[0].name, "id");
-                        assert!(s.fields[1].default_value.is_some());
-                    }
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    fn test_validation_pair() {
-        let doc = parse_ok(r#"{ my_user :: User = { name: "Alice" } }"#);
-        let members = match doc.root.kind {
-            MonValueKind::Object(m) => m,
-            _ => panic!(),
-        };
-        assert_eq!(members.len(), 1);
-        match &members[0] {
-            Member::Pair(p) => {
-                assert_eq!(p.key, "my_user");
-                assert!(p.validation.is_some());
-                assert!(matches!(p.value.kind, MonValueKind::Object(_)));
-            }
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    #[ignore = "This test is for visual confirmation and is ignored by default."]
-    fn visual_conformation_from_golden() {
-        let contents = fs::read_to_string("tests/ok/golden.mon").unwrap();
-        let parsed = Parser::new_with_name(&contents, "test.mon".to_string())
-            .unwrap()
-            .parse_document();
-
-        print!("parsed: \n{}", pretty_result(parsed));
-    }
-
-    #[test]
-    fn test_all_mon_files() {
-        let tests_dir = "./tests";
-        let entries = fs::read_dir(tests_dir).expect("Failed to read tests directory");
-
-        for entry in entries {
-            let entry = entry.expect("Failed to read directory entry");
-            let path = entry.path();
-
-            if path.is_file() && path.extension().is_some_and(|ext| ext == "mon") {
-                println!("Parsing file: {path:?}");
-                let source = fs::read_to_string(&path)
-                    .unwrap_or_else(|_| panic!("Failed to read file: {path:?}"));
-
-                let mut parser = Parser::new_with_name(&source, path.to_str().unwrap().to_string())
-                    .expect("Lexer failed");
-
-                if let Err(err) = parser.parse_document() {
-                    panic!("Failed to parse {:?}. Error: {:#?}", path, Report::new(err));
-                }
-            }
-        }
+        let members = doc.root.kind.unwrap_object();
+        assert_eq!(members.len(), 4);
     }
 }
