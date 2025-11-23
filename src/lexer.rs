@@ -1,3 +1,60 @@
+//! # MON Lexer (Tokenizer)
+//!
+//! This module provides the `Lexer` for the MON language. The lexer, also known as a
+//! tokenizer or scanner, is the first stage in the compilation process. It is responsible
+//! for converting a raw source code string into a sequence of discrete `Token`s.
+//!
+//! ## Architectural Overview
+//!
+//! The `Lexer` is a hand-written, stateful iterator that scans the input character by character
+//! to produce tokens. It recognizes all the fundamental building blocks of the language, such as:
+//!
+//! - **Literals:** Identifiers, strings, and numbers.
+//! - **Keywords:** `true`, `false`, `null`, `import`, etc.
+//! - **Punctuation:** Braces `{{}}`, brackets `[]`, commas `,`, colons `:`, etc.
+//! - **Operators:** `::`, `...`, `&`, `*`, etc.
+//! - **Whitespace and Comments:** These are also produced as tokens, which allows subsequent
+//!   tools (like formatters or IDEs) to preserve them. The [`Parser`](crate::parser::Parser)
+//!   typically filters them out.
+//!
+//! Each `Token` produced contains a [`TokenType`] and its start and end byte positions
+//! in the original source, which is crucial for error reporting.
+//!
+//! ## Use Cases
+//!
+//! Direct use of the `Lexer` is not as common as using the full [`analyze`](crate::api::analyze) pipeline,
+//! but it is essential for tools that operate at the token level.
+//!
+//! - **Syntax Highlighting:** A syntax highlighter can use the lexer to assign colors to
+//!   different token types.
+//! - **Code Formatting:** A formatter (like `rustfmt`) uses the token stream, including
+//!   whitespace and comments, to re-format the code according to a set of rules.
+//! - **Debugging and Educational Tools:** It can be used to show how a source file is broken
+//!   down into its most basic components.
+//!
+//! ## Example: Direct Lexer Usage
+//!
+//! ```rust
+//! use mon_core::lexer::{Lexer, TokenType, Token};
+//!
+//! let source = "key: 123 // A number";
+//!
+//! // Create a new lexer for the source string.
+//! let mut lexer = Lexer::new(source);
+//!
+//! // You can retrieve all tokens at once.
+//! let tokens: Vec<Token> = lexer.lex();
+//!
+//! // Or process them one by one.
+//! let mut lexer = Lexer::new(source);
+//! assert_eq!(lexer.next_token().ttype, TokenType::Identifier("key".to_string()));
+//! assert_eq!(lexer.next_token().ttype, TokenType::Colon);
+//! assert_eq!(lexer.next_token().ttype, TokenType::Whitespace);
+//! assert_eq!(lexer.next_token().ttype, TokenType::Number(123.0));
+//! assert_eq!(lexer.next_token().ttype, TokenType::Whitespace);
+//! assert!(matches!(lexer.next_token().ttype, TokenType::Comment(_)));
+//! assert_eq!(lexer.next_token().ttype, TokenType::Eof);
+//! ```
 /// Represents the different kinds of tokens that the lexer can produce.
 /// Each token is a meaningful unit of the MON language syntax.
 #[derive(Debug, PartialEq, Clone)]
@@ -72,15 +129,21 @@ pub enum TokenType {
     Spread,
 }
 
-/// A token with its type and position
+/// Represents a single lexical token, containing its type and position in the source text.
+///
+/// A `Token` is an atomic unit of the language syntax, like an identifier, a keyword, or a symbol.
 #[derive(Debug, Clone)]
 pub struct Token {
+    /// The type of the token, e.g., `TokenType::Identifier`.
     pub ttype: TokenType,
+    /// The 0-based starting byte position of the token in the source string.
     pub pos_start: usize,
+    /// The 0-based ending byte position of the token in the source string.
     pub pos_end: usize,
 }
 
 impl Token {
+    /// Creates a new `Token`.
     #[must_use]
     pub fn new(ttype: TokenType, pos_start: usize, pos_end: usize) -> Token {
         Token {
@@ -91,12 +154,52 @@ impl Token {
     }
 }
 
+/// A lexer for the MON language, also known as a tokenizer or scanner.
+///
+/// The `Lexer`'s primary role is to read MON source code as a stream of characters
+/// and break it down into a sequence of [`Token`]s. Each token represents a
+/// meaningful unit of the language, like an identifier, a number, or a punctuation mark.
+///
+/// The `Lexer` is the first step in the compilation pipeline, providing the input
+/// for the [`Parser`](crate::parser::Parser).
+///
+/// # Example: How to use the Lexer
+///
+/// You can use the `Lexer` to tokenize a MON source string and inspect the tokens.
+///
+/// ```rust
+/// use mon_core::lexer::{Lexer, TokenType, Token};
+///
+/// let source = "{ key: 123 }";
+///
+/// // 1. Create a new lexer for the source code.
+/// let mut lexer = Lexer::new(source);
+///
+/// // 2. Use `lex()` to get all tokens.
+/// let tokens: Vec<Token> = lexer.lex();
+///
+/// assert_eq!(tokens[0].ttype, TokenType::LBrace);
+/// assert_eq!(tokens[1].ttype, TokenType::Whitespace);
+/// assert_eq!(tokens[2].ttype, TokenType::Identifier("key".to_string()));
+/// assert_eq!(tokens[3].ttype, TokenType::Colon);
+/// assert_eq!(tokens[4].ttype, TokenType::Whitespace);
+/// assert_eq!(tokens[5].ttype, TokenType::Number(123.0));
+/// assert_eq!(tokens[6].ttype, TokenType::Whitespace);
+/// assert_eq!(tokens[7].ttype, TokenType::RBrace);
+/// assert_eq!(tokens[8].ttype, TokenType::Eof);
+///
+/// // Alternatively, you can process tokens one by one using `next_token`.
+/// let mut lexer = Lexer::new(source);
+/// assert_eq!(lexer.next_token().ttype, TokenType::LBrace);
+/// assert_eq!(lexer.next_token().ttype, TokenType::Whitespace);
+/// ```
 pub struct Lexer<'a> {
     chars: std::iter::Peekable<std::str::Chars<'a>>,
     position: usize,
 }
 
 impl<'a> Lexer<'a> {
+    /// Creates a new `Lexer` for the given input string.
     #[must_use]
     pub fn new(input: &'a str) -> Self {
         Self {
@@ -105,6 +208,9 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Consumes the `Lexer` and returns a `Vec<Token>` containing all tokens from the source.
+    ///
+    /// This method will tokenize the entire input string up to and including the final [`TokenType::Eof`] token.
     pub fn lex(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
         loop {
@@ -118,6 +224,10 @@ impl<'a> Lexer<'a> {
         tokens
     }
 
+    /// Scans and returns the next [`Token`] from the input stream.
+    ///
+    /// This is the core tokenizing function. When the end of the input is reached,
+    /// it will repeatedly return a token of type [`TokenType::Eof`].
     pub fn next_token(&mut self) -> Token {
         let start_pos = self.position;
 
@@ -221,14 +331,14 @@ impl<'a> Lexer<'a> {
         let mut value = String::new();
         loop {
             match self.peek() {
-                Some('\"') => {
+                Some('"') => {
                     self.advance(); // Consume the closing quote
                     return TokenType::String(value);
                 }
                 Some('\\') => {
                     self.advance(); // Consume the backslash
                     match self.advance() {
-                        Some('\"') => value.push('\"'),
+                        Some('"') => value.push('"'),
                         Some('\\') => value.push('\\'),
                         Some('n') => value.push('\n'),
                         Some('r') => value.push('\r'),
@@ -314,7 +424,7 @@ pub(crate) fn tokens_to_pretty_string(tokens: &[Token]) -> String {
     for token in tokens {
         buff.push(format!(
             "{:?}, {}, {}",
-            token.ttype, token.pos_start, token.pos_end
+            token.ttype, token.pos_start, token.pos_end,
         ));
     }
 
@@ -418,28 +528,6 @@ mod tests {
     }
 
     #[test]
-    fn test_strings() {
-        let input = r#""hello world" "" "another""#;
-        let expected = vec![
-            TokenType::String("hello world".to_string()),
-            TokenType::String(String::new()),
-            TokenType::String("another".to_string()),
-            TokenType::Eof,
-        ];
-        assert_tokens(input, &expected);
-    }
-
-    #[test]
-    fn test_strings_with_escapes() {
-        let input = r#""hello \"world\"\t\n\r""#;
-        let expected = vec![
-            TokenType::String("hello \"world\"\t\n\r".to_string()),
-            TokenType::Eof,
-        ];
-        assert_tokens(input, &expected);
-    }
-
-    #[test]
     fn test_comments_and_whitespace() {
         let input = " // this is a comment\n key: value // another one";
         let mut lexer = Lexer::new(input);
@@ -465,22 +553,22 @@ mod tests {
     #[test]
     fn test_complex_mon_structure() {
         let input = r#"
-{
-    // Config settings
-    service_name: "My App",
-    port: 8080,
-    is_enabled: on,
+        {
+        // Config settings
+        service_name: "My App",
+        port: 8080,
+        is_enabled: on,
 
-    &default_user: {
-        permissions: ["READ", "WRITE"],
-    },
+        &default_user: {
+            permissions: ["READ", "WRITE"],
+        },
 
-    admin :: User = {
-        ...*default_user,
-        name: "Admin",
+        admin :: User = {
+            ...*default_user,
+            name: "Admin",
+            }
         }
-}
-            "#;
+                    "#;
         let expected = vec![
             TokenType::LBrace,
             TokenType::Identifier("service_name".to_string()),
@@ -528,5 +616,247 @@ mod tests {
         ];
         print!("{input}");
         assert_tokens(input, &expected);
+    }
+
+    #[test]
+    fn test_unclosed_string() {
+        let input = r#"{ key: "unclosed }"#;
+        let mut lexer = Lexer::new(input);
+        let tokens = lexer.lex();
+        
+        // Unclosed string should return Unknown token
+        let has_unknown = tokens.iter().any(|t| matches!(t.ttype, TokenType::Unknown));
+        assert!(has_unknown, "Should have Unknown token for unclosed string");
+    }
+
+    #[test]
+    fn test_string_with_escapes() {
+        let input = r#""hello\nworld\t\"test\"""#;
+        let mut lexer = Lexer::new(input);
+        let token = lexer.next_token();
+        
+        match token.ttype {
+            TokenType::String(s) => {
+                // The lexer actually processes the escapes
+                assert!(s.contains('\n'));
+                assert!(s.contains('\t'));
+                assert!(s.contains('"'));
+                assert_eq!(s, "hello\nworld\t\"test\"");
+            }
+            _ => panic!("Expected string token, got {:?}", token.ttype),
+        }
+    }
+
+    #[test]
+    fn test_invalid_escape_at_eof() {
+        let input = r#""test\"#;
+        let mut lexer = Lexer::new(input);
+        let token = lexer.next_token();
+        assert!(matches!(token.ttype, TokenType::Unknown));
+    }
+
+    #[test]
+    fn test_number_with_exponent() {
+        let input = "1.23e10 4.5E-3";
+        let mut lexer = Lexer::new(input);
+        
+        let tok1 = lexer.next_token();
+        assert!(matches!(tok1.ttype, TokenType::Number(n) if (n - 1.23e10).abs() < 1e-6));
+        
+        lexer.next_token(); // whitespace
+        let tok2 = lexer.next_token();
+        assert!(matches!(tok2.ttype, TokenType::Number(n) if (n - 4.5e-3).abs() < 1e-9));
+    }
+
+    #[test]
+    fn test_negative_numbers() {
+        let input = "-42 -3.14";
+        let expected = vec![
+            TokenType::Number(-42.0),
+            TokenType::Number(-3.14),
+            TokenType::Eof,
+        ];
+        assert_tokens(input, &expected);
+    }
+
+    #[test]
+    fn test_dotdot_not_spread() {
+        // ".." without third dot should be two dots
+        let input = "..";
+        let mut lexer = Lexer::new(input);
+        let tok1 = lexer.next_token();
+        let tok2 = lexer.next_token();
+        
+        // First dot, then either another dot or unknown
+        assert!(matches!(tok1.ttype, TokenType::Dot | TokenType::Unknown));
+    }
+
+    #[test]
+    fn test_unknown_character() {
+        let input = "{ @invalid }";
+        let mut lexer = Lexer::new(input);
+        let tokens: Vec<TokenType> = lexer.lex().into_iter().map(|t| t.ttype).collect();
+        
+        // Should have Unknown token for @
+        assert!(tokens.iter().any(|t| matches!(t, TokenType::Unknown)));
+    }
+
+    #[test]
+    fn test_single_slash_not_comment() {
+        let input = "test / value";
+        let mut lexer = Lexer::new(input);
+        let tokens: Vec<TokenType> = lexer.lex().into_iter().map(|t| t.ttype).collect();
+        
+        // Single slash should produce Unknown
+        assert!(tokens.iter().any(|t| matches!(t, TokenType::Unknown)));
+    }
+
+    #[test]
+    fn test_escape_r() {
+        let input = r#""test\rvalue""#;
+        let mut lexer = Lexer::new(input);
+        let token = lexer.next_token();
+        assert!(matches!(token.ttype, TokenType::String(s) if s.len() > 0));
+    }
+
+    #[test]
+    fn test_escape_backslash() {
+        let input = r#""test\\value""#;
+        let mut lexer = Lexer::new(input);
+        let token = lexer.next_token();
+        assert!(matches!(token.ttype, TokenType::String(s) if s.len() > 0));
+    }
+
+    #[test]
+    fn test_unknown_escape_preserved() {
+        let input = r#""test\xvalue""#;
+        let mut lexer = Lexer::new(input);
+        let token = lexer.next_token();
+        // String should parse successfully
+        assert!(matches!(token.ttype, TokenType::String(_)));
+    }
+
+    #[test]
+    fn test_zero_number() {
+        assert_tokens("0", &[TokenType::Number(0.0), TokenType::Eof]);
+    }
+
+    #[test]
+    fn test_decimal_point_only() {
+        assert_tokens("3.14", &[TokenType::Number(3.14), TokenType::Eof]);
+    }
+
+    #[test]
+    fn test_leading_decimal() {
+        // .5 should be parsed as dot  + number
+        let input = ".5";
+        let mut lexer = Lexer::new(input);
+        let tok1 = lexer.next_token();
+        let tok2 = lexer.next_token();
+        assert!(matches!(tok1.ttype, TokenType::Dot));
+        assert!(matches!(tok2.ttype, TokenType::Number(5.0)));
+    }
+
+    #[test]
+    fn test_multiline_comment() {
+        let input = "// line 1\n// line 2\nvalue";
+        let mut lexer = Lexer::new(input);
+        let tokens: Vec<TokenType> = lexer.lex().into_iter()
+            .filter(|t| !matches!(t.ttype, TokenType::Whitespace | TokenType::Comment(_)))
+            .map(|t| t.ttype)
+            .collect();
+        assert_eq!(tokens, vec![TokenType::Identifier("value".to_string()), TokenType::Eof]);
+    }
+
+    #[test]
+    fn test_comment_at_eof() {
+        let input = "value // comment at end";
+        let mut lexer = Lexer::new(input);
+        let tokens: Vec<TokenType> = lexer.lex().into_iter().map(|t| t.ttype).collect();
+        assert!(tokens.iter().any(|t| matches!(t, TokenType::Comment(_))));
+    }
+
+    #[test]
+    fn test_all_keywords() {
+        let input = "true false null on off import from as";
+        let expected = vec![
+            TokenType::True,
+            TokenType::False,
+            TokenType::Null,
+            TokenType::True,  // 'on' maps to true
+            TokenType::False, // 'off' maps to false
+            TokenType::Import,
+            TokenType::From,
+            TokenType::As,
+            TokenType::Eof,
+        ];
+        assert_tokens(input, &expected);
+    }
+
+    #[test]
+    fn test_identifiers_with_underscores() {
+        let input = "my_var _private __dunder";
+        let expected = vec![
+            TokenType::Identifier("my_var".to_string()),
+            TokenType::Identifier("_private".to_string()),
+            TokenType::Identifier("__dunder".to_string()),
+            TokenType::Eof,
+        ];
+        assert_tokens(input, &expected);
+    }
+
+    #[test]
+    fn test_mixed_operators() {
+        let input = ":: = ...";
+        let expected = vec![
+            TokenType::DoubleColon,
+            TokenType::Equals,
+            TokenType::Spread,
+            TokenType::Eof,
+        ];
+        assert_tokens(input, &expected);
+    }
+
+    #[test]
+    fn test_adjacent_tokens_no_whitespace() {
+        let input = "[1,2,3]";
+        let mut lexer = Lexer::new(input);
+        let tokens: Vec<TokenType> = lexer.lex().into_iter()
+            .filter(|t| !matches!(t.ttype, TokenType::Whitespace))
+            .map(|t| t.ttype)
+            .collect();
+        assert_eq!(tokens.len(), 8); // [, 1, ,, 2, ,, 3, ], EOF
+    }
+
+    #[test]
+    fn test_hash_token() {
+        let input = "#struct";
+        let expected = vec![
+            TokenType::Hash,
+            TokenType::Identifier("struct".to_string()),
+            TokenType::Eof,
+        ];
+        assert_tokens(input, &expected);
+    }
+
+    #[test]
+    fn test_dollar_token() {
+        let input = "$Status.Active";
+        let expected = vec![
+            TokenType::Dollar,
+            TokenType::Identifier("Status".to_string()),
+            TokenType::Dot,
+            TokenType::Identifier("Active".to_string()),
+            TokenType::Eof,
+        ];
+        assert_tokens(input, &expected);
+    }
+
+    #[test]
+    fn test_empty_string() {
+        let input = r#""""#;
+        let mut lexer = Lexer::new(input);
+        let token = lexer.next_token();
+        assert_eq!(token.ttype, TokenType::String("".to_string()));
     }
 }

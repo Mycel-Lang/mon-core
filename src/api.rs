@@ -1,3 +1,48 @@
+//! # Public API for MON Core
+//!
+//! This module provides the primary high-level interface for the `mon-core` library. It is the
+//! recommended entry point for most users who want to parse, resolve, and validate MON source code
+//! in a single, streamlined operation.
+//!
+//! ## Architectural Overview
+//!
+//! The `api` module acts as a facade over the entire compilation pipeline, orchestrating the
+//! [`lexer`](crate::lexer), [`parser`](crate::parser), and [`resolver`](crate::resolver)
+//! to provide a simple and powerful analysis function. Its main purpose is to abstract away the
+//! complexities of the individual stages.
+//!
+//! ## Use Cases
+//!
+//! The central use case is to take a MON source string and get a fully processed, validated, 
+//! and serializable result.
+//!
+//! - **Analyzing a MON file:** The [`analyze`] function is the workhorse of this module.
+//! - **Serializing the result:** Once analysis is complete, the [`AnalysisResult`] can be
+//!   easily converted to other formats like JSON or YAML.
+//! - **Powering Language Tools:** For more advanced use cases like Language Server Protocol (LSP)
+//!   implementations, the `AnalysisResult` provides methods for "go to definition", "hover",
+//!   and "find references" when the `lsp` feature is enabled.
+//!
+//! ## Example: Analyze and Serialize
+//!
+//! ```rust
+//! use mon_core::api::analyze;
+//! # use mon_core::error::MonError;
+//!
+//! # fn main() -> Result<(), MonError> {
+//! let source = r#"{ version: 1.0, features: ["a", "b"] }"#;
+//!
+//! // 1. Analyze the source string.
+//! let result = analyze(source, "my_config.mon")?;
+//!
+//! // 2. Convert the result to a YAML string.
+//! let yaml_output = result.to_yaml().unwrap();
+//!
+//! println!("{}", yaml_output);
+//! assert!(yaml_output.contains("version: 1.0"));
+//! # Ok(())
+//! # }
+//! ```
 #[allow(dead_code)]
 use crate::ast::{MonDocument, MonValue, SymbolTable, TypeSpec};
 use crate::error::MonError;
@@ -19,13 +64,18 @@ use std::fmt::Display;
 use std::path::PathBuf;
 
 /// The result of a successful analysis of a MON document.
-/// This struct contains the fully resolved document and provides
+///
+/// This struct contains the fully resolved [`MonDocument`] and provides
 /// methods for serialization and further inspection, making it
 /// suitable for both direct consumption and for powering an LSP.
 pub struct AnalysisResult {
+    /// The fully resolved and validated [`MonDocument`].
     pub document: MonDocument,
+    /// A clone of the original [`MonDocument`] before resolution, used for LSP features.
     pub unresolved_document: MonDocument,
+    /// The symbol table containing all type definitions.
     pub symbol_table: SymbolTable,
+    /// A map of all declared anchors.
     pub anchors: HashMap<String, MonValue>,
 }
 
@@ -135,6 +185,7 @@ impl AnalysisResult {
 
 #[cfg(feature = "lsp")]
 #[derive(Debug, Clone, Copy)]
+/// An AST node found during a location-based query.
 enum FoundNode<'a> {
     Value(&'a MonValue),
     TypeSpec(&'a TypeSpec),
@@ -174,6 +225,7 @@ fn find_node_at(value: &MonValue, position: usize) -> Option<FoundNode<'_>> {
 }
 
 #[cfg(feature = "lsp")]
+/// Recursively finds the most specific `TypeSpec` node containing the given position.
 fn find_node_in_type_spec(type_spec: &TypeSpec, position: usize) -> Option<FoundNode<'_>> {
     let span = type_spec.get_span();
     if position < span.offset() || position >= span.offset() + span.len() {
@@ -194,7 +246,7 @@ fn find_node_in_type_spec(type_spec: &TypeSpec, position: usize) -> Option<Found
 /// Analyzes a MON source string, parsing, resolving, and validating it.
 ///
 /// This is the primary entry point for processing MON data. It returns an
-/// `AnalysisResult` on success, which contains the fully resolved document
+/// [`AnalysisResult`] on success, which contains the fully resolved document
 /// and provides methods for serialization and LSP-related queries.
 ///
 /// # Arguments
@@ -204,7 +256,7 @@ fn find_node_in_type_spec(type_spec: &TypeSpec, position: usize) -> Option<Found
 ///
 /// # Errors
 ///
-/// Returns a `MonError` if parsing, resolution, or validation fails.
+/// Returns a [`MonError`] if parsing, resolution, or validation fails.
 ///
 /// # Panics
 ///
@@ -255,8 +307,7 @@ mod tests {
 
     #[test]
     fn test_simple_parse_to_json() {
-        let source = r#"
-        {
+        let source = r#"{
             name: "My App",
             version: 1.0,
             is_enabled: true,
@@ -265,8 +316,7 @@ mod tests {
                 host: "localhost",
                 port: 8080.0,
             }
-        }
-    "#;
+        }"#;
 
         let expected_json = serde_json::json!({
             "name": "My App",
@@ -288,13 +338,11 @@ mod tests {
 
     #[test]
     fn test_analyze_semantic_info() {
-        let source = r"
-        {
+        let source = r#"{
             MyType: #struct { field(String) },
             &my_anchor: { a: 1 },
             value: *my_anchor,
-        }
-    ";
+        }"#;
 
         let analysis_result = analyze(source, "test.mon").unwrap();
 
@@ -308,12 +356,11 @@ mod tests {
     #[test]
     fn test_simple_parse_to_yaml() {
         let source = r#"
-        {
-            name: "My App",
-            version: 1.0,
-            is_enabled: true,
-        }
-    "#;
+{
+        name: "My App",
+        version: 1.0,
+    is_enabled: true,
+}"#;
 
         let expected_yaml = "is_enabled: true\nname: My App\nversion: 1.0\n";
 
