@@ -13,7 +13,7 @@
 //!
 //! ## Use Cases
 //!
-//! The central use case is to take a MON source string and get a fully processed, validated, 
+//! The central use case is to take a MON source string and get a fully processed, validated,
 //! and serializable result.
 //!
 //! - **Analyzing a MON file:** The [`analyze`] function is the workhorse of this module.

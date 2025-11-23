@@ -1,7 +1,7 @@
 // Additional parser error path tests
 // These systematically test unhappy paths to improve coverage
 
-use mon_core::{analyze, error::MonError};
+use mon_core::analyze;
 
 #[test]
 fn test_parser_error_missing_closing_brace() {
@@ -21,7 +21,7 @@ fn test_parser_error_missing_closing_bracket() {
 fn test_parser_error_missing_colon() {
     let source = "{ key 123 }";
     let result = analyze(source, "test.mon");
-    assert!(result.is_err(), "Should fail with missing :");  
+    assert!(result.is_err(), "Should fail with missing :");
 }
 
 #[test]

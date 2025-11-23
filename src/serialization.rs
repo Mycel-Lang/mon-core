@@ -7,7 +7,7 @@
 //! ## Architectural Overview
 //!
 //! The process is straightforward:
-//! 
+//!
 //! 1.  A fully resolved and validated [`MonValue`](crate::ast::MonValue) from the AST is passed
 //!     to the internal `to_value` function.
 //! 2.  The function recursively traverses the `MonValue`, converting it into a tree of
@@ -17,24 +17,24 @@
 //! 4.  The resulting [`Value`] is designed to be directly serializable by `serde`. It uses a
 //!     `BTreeMap` for objects to ensure that the output has a deterministic order of keys,
 //!     which is good practice for configuration and data files.
-//! 
+//!
 //! ## Use Cases
-//! 
+//!
 //! This module is used internally by [`AnalysisResult`](crate::api::AnalysisResult) to provide
 //! the `to_json()` and `to_yaml()` methods. Direct interaction with this module is typically not
 //! necessary for end-users, as the public API in the [`api`](crate::api) module provides a more
 //! convenient interface.
-//! 
+//!
 //! ```rust
 //! use mon_core::api::analyze;
-//! 
+//!
 //! # fn main() -> Result<(), mon_core::error::MonError> {
 //! let source = "{ b: 2, a: 1 }";
-//! 
+//!
 //! // The serialization module is used behind the scenes by `to_json`.
 //! let result = analyze(source, "test.mon")?;
 //! let json = result.to_json().unwrap();
-//! 
+//!
 //! // Note that the keys are sorted alphabetically because of the BTreeMap.
 //! assert_eq!(json, "{\n  \"a\": 1.0,\n  \"b\": 2.0\n}");
 //! # Ok(())
@@ -84,7 +84,7 @@ pub(crate) fn to_value(mon_value: &MonValue) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{Pair, MonValueKind, Member, MonValue};
+    use crate::ast::{Member, MonValue, MonValueKind, Pair};
     use std::collections::BTreeMap;
 
     fn make_value(kind: MonValueKind) -> MonValue {
@@ -134,12 +134,15 @@ mod tests {
         ];
         let mon_val = make_value(MonValueKind::Array(arr));
         let result = to_value(&mon_val);
-        
-        assert_eq!(result, Value::Array(vec![
-            Value::Number(1.0),
-            Value::Number(2.0),
-            Value::Number(3.0),
-        ]));
+
+        assert_eq!(
+            result,
+            Value::Array(vec![
+                Value::Number(1.0),
+                Value::Number(2.0),
+                Value::Number(3.0),
+            ])
+        );
     }
 
     #[test]
@@ -152,7 +155,7 @@ mod tests {
         let obj = vec![Member::Pair(pair)];
         let mon_val = make_value(MonValueKind::Object(obj));
         let result = to_value(&mon_val);
-        
+
         let mut expected_map = BTreeMap::new();
         expected_map.insert("test".to_string(), Value::String("value".to_string()));
         assert_eq!(result, Value::Object(expected_map));
@@ -165,13 +168,10 @@ mod tests {
             value: make_value(MonValueKind::Number(123.0)),
             validation: None,
         };
-        let obj = vec![
-            Member::Pair(pair),
-            Member::Spread("ignored".to_string()),
-        ];
+        let obj = vec![Member::Pair(pair), Member::Spread("ignored".to_string())];
         let mon_val = make_value(MonValueKind::Object(obj));
         let result = to_value(&mon_val);
-        
+
         let mut expected_map = BTreeMap::new();
         expected_map.insert("data".to_string(), Value::Number(123.0));
         assert_eq!(result, Value::Object(expected_map));
@@ -213,14 +213,14 @@ mod tests {
         };
         let outer_obj = vec![Member::Pair(outer_pair)];
         let mon_val = make_value(MonValueKind::Object(outer_obj));
-        
+
         let result = to_value(&mon_val);
-        
+
         let mut inner_map = BTreeMap::new();
         inner_map.insert("inner".to_string(), Value::Number(42.0));
         let mut outer_map = BTreeMap::new();
         outer_map.insert("outer".to_string(), Value::Object(inner_map));
-        
+
         assert_eq!(result, Value::Object(outer_map));
     }
 }

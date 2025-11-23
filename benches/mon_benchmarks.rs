@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
-use mon_core::{analyze, lexer::Lexer, parser::Parser, resolver::Resolver};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use mon_core::{analyze, lexer::Lexer, parser::Parser};
 
 // ============================================================================
 // Test Data: Varying Complexity and Size
@@ -130,7 +130,7 @@ fn bench_lexer_tiny(c: &mut Criterion) {
 
 fn bench_lexer_sizes(c: &mut Criterion) {
     let mut group = c.benchmark_group("lexer_by_size");
-    
+
     for (name, source) in [
         ("tiny", TINY_MON),
         ("small", SMALL_MON),
@@ -145,13 +145,13 @@ fn bench_lexer_sizes(c: &mut Criterion) {
             })
         });
     }
-    
+
     group.finish();
 }
 
 fn bench_lexer_scaling(c: &mut Criterion) {
     let mut group = c.benchmark_group("lexer_array_scaling");
-    
+
     for size in [10, 50, 100, 500, 1000] {
         let source = generate_xlarge_mon(size);
         group.throughput(Throughput::Elements(size as u64));
@@ -162,7 +162,7 @@ fn bench_lexer_scaling(c: &mut Criterion) {
             })
         });
     }
-    
+
     group.finish();
 }
 
@@ -172,7 +172,7 @@ fn bench_lexer_scaling(c: &mut Criterion) {
 
 fn bench_parser_sizes(c: &mut Criterion) {
     let mut group = c.benchmark_group("parser_by_size");
-    
+
     for (name, source) in [
         ("tiny", TINY_MON),
         ("small", SMALL_MON),
@@ -187,13 +187,13 @@ fn bench_parser_sizes(c: &mut Criterion) {
             })
         });
     }
-    
+
     group.finish();
 }
 
 fn bench_parser_scaling(c: &mut Criterion) {
     let mut group = c.benchmark_group("parser_array_scaling");
-    
+
     for size in [10, 50, 100, 500, 1000] {
         let source = generate_xlarge_mon(size);
         group.throughput(Throughput::Elements(size as u64));
@@ -204,7 +204,7 @@ fn bench_parser_scaling(c: &mut Criterion) {
             })
         });
     }
-    
+
     group.finish();
 }
 
@@ -214,7 +214,7 @@ fn bench_parser_scaling(c: &mut Criterion) {
 
 fn bench_e2e_analysis(c: &mut Criterion) {
     let mut group = c.benchmark_group("e2e_analysis");
-    
+
     for (name, source) in [
         ("tiny", TINY_MON),
         ("small", SMALL_MON),
@@ -223,18 +223,16 @@ fn bench_e2e_analysis(c: &mut Criterion) {
     ] {
         group.throughput(Throughput::Bytes(source.len() as u64));
         group.bench_with_input(BenchmarkId::from_parameter(name), source, |b, src| {
-            b.iter(|| {
-                analyze(black_box(src), "benchmark.mon")
-            })
+            b.iter(|| analyze(black_box(src), "benchmark.mon"))
         });
     }
-    
+
     group.finish();
 }
 
 fn bench_e2e_with_serialization(c: &mut Criterion) {
     let mut group = c.benchmark_group("e2e_with_json_serialization");
-    
+
     for (name, source) in [
         ("tiny", TINY_MON),
         ("small", SMALL_MON),
@@ -249,23 +247,21 @@ fn bench_e2e_with_serialization(c: &mut Criterion) {
             })
         });
     }
-    
+
     group.finish();
 }
 
 fn bench_e2e_scaling(c: &mut Criterion) {
     let mut group = c.benchmark_group("e2e_array_scaling");
-    
+
     for size in [10, 50, 100, 500, 1000] {
         let source = generate_xlarge_mon(size);
         group.throughput(Throughput::Elements(size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &source, |b, src| {
-            b.iter(|| {
-                analyze(black_box(src), "benchmark.mon")
-            })
+            b.iter(|| analyze(black_box(src), "benchmark.mon"))
         });
     }
-    
+
     group.finish();
 }
 
@@ -307,11 +303,9 @@ fn bench_realistic_config(c: &mut Criterion) {
             compression: false
         }
     }"#;
-    
+
     c.bench_function("realistic_app_config", |b| {
-        b.iter(|| {
-            analyze(black_box(config), "app_config.mon")
-        })
+        b.iter(|| analyze(black_box(config), "app_config.mon"))
     });
 }
 
@@ -350,11 +344,9 @@ fn bench_complex_schema(c: &mut Criterion) {
             ]
         }
     }"#;
-    
+
     c.bench_function("complex_schema_validation", |b| {
-        b.iter(|| {
-            analyze(black_box(schema), "schema.mon")
-        })
+        b.iter(|| analyze(black_box(schema), "schema.mon"))
     });
 }
 
@@ -369,11 +361,7 @@ criterion_group!(
     bench_lexer_scaling
 );
 
-criterion_group!(
-    parser_benches,
-    bench_parser_sizes,
-    bench_parser_scaling
-);
+criterion_group!(parser_benches, bench_parser_sizes, bench_parser_scaling);
 
 criterion_group!(
     e2e_benches,

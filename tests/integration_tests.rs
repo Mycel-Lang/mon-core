@@ -12,11 +12,7 @@ fn get_test_file_path(subdir: &str, filename: &str) -> PathBuf {
 
 fn read_test_file(subdir: &str, filename: &str) -> String {
     let path = get_test_file_path(subdir, filename);
-    fs::read_to_string(&path).expect(&format!("Failed to read test file: {:?}", path))
-}
-
-fn normalize_json(json_str: &str) -> serde_json::Value {
-    serde_json::from_str(json_str).unwrap()
+    fs::read_to_string(&path).unwrap_or_else(|_| panic!("Failed to read test file: {:?}", path))
 }
 
 // Tests for valid MON files that should parse and resolve successfully
@@ -26,10 +22,14 @@ mod ok_tests {
     #[test]
     fn test_primitives() {
         let mon_content = read_test_file("ok", "primitives.mon");
-        
+
         let result = analyze(&mon_content, "primitives.mon");
-        assert!(result.is_ok(), "Should parse successfully: {:?}", result.err());
-        
+        assert!(
+            result.is_ok(),
+            "Should parse successfully: {:?}",
+            result.err()
+        );
+
         // Just verify it parses and produces valid JSON
         let json = result.unwrap().to_json();
         assert!(json.is_ok(), "Should serialize to JSON");
@@ -39,49 +39,77 @@ mod ok_tests {
     fn test_collections() {
         let mon_content = read_test_file("ok", "collections.mon");
         let result = analyze(&mon_content, "collections.mon");
-        assert!(result.is_ok(), "Should parse successfully: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Should parse successfully: {:?}",
+            result.err()
+        );
     }
 
     #[test]
     fn test_structs() {
         let mon_content = read_test_file("ok", "structs.mon");
         let result = analyze(&mon_content, "structs.mon");
-        assert!(result.is_ok(), "Should parse successfully: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Should parse successfully: {:?}",
+            result.err()
+        );
     }
 
     #[test]
     fn test_enums() {
         let mon_content = read_test_file("ok", "enums.mon");
         let result = analyze(&mon_content, "enums.mon");
-        assert!(result.is_ok(), "Should parse successfully: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Should parse successfully: {:?}",
+            result.err()
+        );
     }
 
     #[test]
     fn test_composition() {
         let mon_content = read_test_file("ok", "composition.mon");
         let result = analyze(&mon_content, "composition.mon");
-        assert!(result.is_ok(), "Should parse successfully: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Should parse successfully: {:?}",
+            result.err()
+        );
     }
 
     #[test]
     fn test_advanced_types() {
         let mon_content = read_test_file("ok", "advanced_types.mon");
         let result = analyze(&mon_content, "advanced_types.mon");
-        assert!(result.is_ok(), "Should parse successfully: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Should parse successfully: {:?}",
+            result.err()
+        );
     }
 
     #[test]
     fn test_edge_cases() {
         let mon_content = read_test_file("ok", "edge_cases.mon");
         let result = analyze(&mon_content, "edge_cases.mon");
-        assert!(result.is_ok(), "Should parse successfully: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Should parse successfully: {:?}",
+            result.err()
+        );
     }
 
     #[test]
     fn test_complex_composition() {
         let mon_content = read_test_file("ok", "complex_composition.mon");
         let result = analyze(&mon_content, "complex_composition.mon");
-        assert!(result.is_ok(), "Should parse successfully: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Should parse successfully: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -98,7 +126,11 @@ mod ok_tests {
         let mon_path = get_test_file_path("ok", "nightmare.mon");
         let mon_content = read_test_file("ok", "nightmare.mon");
         let result = analyze(&mon_content, &mon_path.to_string_lossy());
-        assert!(result.is_ok(), "Should parse successfully: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Should parse successfully: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -107,7 +139,10 @@ mod ok_tests {
         let mon_content = read_test_file("ok", "pandemonium.mon");
         let result = analyze(&mon_content, &mon_path.to_string_lossy());
         // This file has SpreadOnNonObject error, so it's expected to fail
-        assert!(result.is_err(), "Expected error due to spread on non-object");
+        assert!(
+            result.is_err(),
+            "Expected error due to spread on non-object"
+        );
     }
 }
 

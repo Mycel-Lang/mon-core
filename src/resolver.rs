@@ -7,60 +7,60 @@
 //! ## Architectural Overview
 //!
 //! The resolver is a stateful visitor that walks the AST and performs several key actions:
-//! 
+//!
 //! - **Import Resolution**: It finds, parses, and resolves `import` statements. It maintains a cache of
 //!   already resolved documents to avoid redundant work and uses a resolving stack to detect circular
 //!   dependencies between files. It also handles the `mon:` URI scheme for built-in schemas.
-//! 
+//!
 //! - **Symbol & Anchor Collection**: It populates a global symbol table with type definitions (`#struct`, `#enum`)
 //!   and a global map with all declared anchors (`&my_anchor`).
-//! 
+//!
 //! - **Alias and Spread Resolution**: It replaces all aliases (`*my_anchor`) and spreads (`...*my_anchor`)
 //!   with deep clones of their original values. This is where composition happens.
-//! 
+//!
 //! - **Validation**: It performs type checking for any pair that has a validation specifier (`:: MyType`).
 //!   It ensures that structs have the correct fields, enums have valid variants, and that all types match
 //!   their definitions.
-//! 
+//!
 //! After the resolver has finished, the AST is considered fully resolved and validated.
-//! 
+//!
 //! ## Use Cases
-//! 
+//!
 //! While you can use the resolver directly for fine-grained control, most users will interact
 //! with it via the top-level [`analyze`](crate::api::analyze) function. Direct use is beneficial when:
-//! 
+//!
 //! - You need to inspect the symbol table or anchors after resolution.
 //! - You want to provide a custom path for built-in schemas.
 //! - You are building a tool that needs to hook into a specific part of the analysis lifecycle.
-//! 
+//!
 //! ## Example: Direct Resolver Usage
-//! 
+//!
 //! ```rust
 //! use mon_core::parser::Parser;
 //! use mon_core::resolver::Resolver;
 //! use mon_core::error::MonError;
 //! use std::path::PathBuf;
-//! 
+//!
 //! # fn main() -> Result<(), MonError> {
 //! let source = r#"
 //! {
 //!     MyStruct: #struct { name(String) },
 //!     &my_data: { name: "Hello" },
-//! 
+//!
 //!     // This instance will be validated against MyStruct.
 //!     instance :: MyStruct = *my_data
 //! }
 //! "#;
 //! let file_path = PathBuf::from("my_file.mon");
-//! 
+//!
 //! // 1. The resolver needs a parsed document from the parser.
 //! let mut parser = Parser::new_with_name(source, file_path.to_string_lossy().to_string())?;
 //! let document = parser.parse_document()?;
-//! 
+//!
 //! // 2. Create and run the resolver.
 //! let mut resolver = Resolver::new();
 //! let resolved_document = resolver.resolve(document.clone(), source, file_path, None)?;
-//! 
+//!
 //! // 3. Inspect the results.
 //! assert!(resolver.symbol_table.types.contains_key("MyStruct"));
 //! assert!(resolver.anchors.contains_key("my_data"));
@@ -112,7 +112,7 @@ use std::sync::Arc;
 /// {
 ///     MyStruct: #struct { name(String) },
 ///     &my_data: { name: "Hello" },
-/// 
+///
 ///     // This instance will be validated against MyStruct.
 ///     instance :: MyStruct = *my_data
 /// }
@@ -140,7 +140,7 @@ pub struct Resolver {
     // Stores resolved documents by their absolute path
     resolved_documents: HashMap<PathBuf, MonDocument>,
     // Stack to detect circular dependencies during import resolution
-    resolving_stack: Vec<(PathBuf, Option<ImportStatement>) >,
+    resolving_stack: Vec<(PathBuf, Option<ImportStatement>)>,
     // Global symbol table for types
     pub symbol_table: AstSymbolTable,
     // Global map for anchors
@@ -294,8 +294,8 @@ impl Resolver {
             {
                 continue;
             }
-            let imported_source_text = 
-                std::fs::read_to_string(&absolute_imported_path).map_err(|_|
+            let imported_source_text =
+                std::fs::read_to_string(&absolute_imported_path).map_err(|_| {
                     ResolverError::ModuleNotFound {
                         path: imported_path_str.to_string(),
                         src: Arc::from(NamedSource::new(
@@ -308,7 +308,7 @@ impl Resolver {
                         )
                             .into(),
                     }
-                )?;
+                })?;
             // Parse without std_path - parser doesn't need it!
             let mut parser = crate::parser::Parser::new_with_name(
                 &imported_source_text,
@@ -471,7 +471,8 @@ impl Resolver {
                     } else {
                         // Non-pair members (like TypeDefinition) are just added
                         // This might need refinement depending on how TypeDefinitions are handled after resolution
-                        final_members_map.insert(format!("{member:?}"), member); // Dummy key for now
+                        final_members_map.insert(format!("{member:?}"), member);
+                        // Dummy key for now
                     }
                 }
                 let final_members = final_members_map.into_values().collect();
@@ -788,7 +789,9 @@ impl Resolver {
 
                                         let mut new_members = Vec::new();
                                         for field_def in &struct_def.fields {
-                                            if let Some(field_value) = value_map.get_mut(&field_def.name) {
+                                            if let Some(field_value) =
+                                                value_map.get_mut(&field_def.name)
+                                            {
                                                 // Field exists, validate its type
                                                 self.validate_value(
                                                     field_value,
@@ -884,7 +887,8 @@ impl Resolver {
                                     if let MonValueKind::EnumValue {
                                         enum_name,
                                         variant_name,
-                                    } = &value.kind {
+                                    } = &value.kind
+                                    {
                                         if enum_name != type_name {
                                             return Err(ResolverError::Validation(
                                                 ValidationError::TypeMismatch {
@@ -981,7 +985,7 @@ impl Resolver {
             }
             TypeSpec::Spread(_, _) => {
                 // Spread types are handled during parsing/resolution, not validation directly
-                return Ok(())
+                return Ok(());
             }
         }
         Ok(())
@@ -1007,7 +1011,7 @@ impl Resolver {
                 file_path,
                 source_text,
             )?;
-            return Ok(())
+            return Ok(());
         }
 
         // Case 2: [T...] - Zero or more elements of type T
@@ -1023,7 +1027,7 @@ impl Resolver {
                         source_text,
                     )?;
                 }
-                return Ok(())
+                return Ok(());
             }
         }
 
@@ -1060,13 +1064,14 @@ impl Resolver {
                     source_text,
                 )?;
             }
-            return Ok(())
+            return Ok(());
         }
 
         // Case 4: [T1, T2...] - One or more elements, first is T1, rest are T2
         if collection_types.len() == 2
             && !matches!(collection_types[0], TypeSpec::Spread(_, _))
-            && matches!(collection_types[1], TypeSpec::Spread(_, _)) {
+            && matches!(collection_types[1], TypeSpec::Spread(_, _))
+        {
             if elements.is_empty() {
                 return Err(ResolverError::Validation(ValidationError::TypeMismatch {
                     field_name: field_name.to_string(),
@@ -1104,13 +1109,14 @@ impl Resolver {
                     )?;
                 }
             }
-            return Ok(())
+            return Ok(());
         }
 
         // Case 5: [T1..., T2] - One or more elements, last is T2, rest are T1
         if collection_types.len() == 2
             && matches!(collection_types[0], TypeSpec::Spread(_, _))
-            && !matches!(collection_types[1], TypeSpec::Spread(_, _)) {
+            && !matches!(collection_types[1], TypeSpec::Spread(_, _))
+        {
             if elements.is_empty() {
                 return Err(ResolverError::Validation(ValidationError::TypeMismatch {
                     field_name: field_name.to_string(),
@@ -1149,7 +1155,7 @@ impl Resolver {
                     )?;
                 }
             }
-            return Ok(())
+            return Ok(());
         }
 
         // If none of the specific cases match, it's an unimplemented complex collection type
@@ -1525,7 +1531,7 @@ mod tests {
                     field_name,
                     expected_type,
                     found_type,
-                    .. 
+                    ..
                 },
             ) => {
                 assert_eq!(field_name, "id");
@@ -1570,7 +1576,7 @@ mod tests {
                     field_name,
                     expected_type,
                     found_type,
-                    .. 
+                    ..
                 },
             ) => {
                 assert_eq!(field_name, "roles");
@@ -1596,7 +1602,7 @@ mod tests {
                     field_name,
                     expected_type,
                     found_type,
-                    .. 
+                    ..
                 },
             ) => {
                 assert_eq!(field_name, "permissions");
@@ -1622,7 +1628,7 @@ mod tests {
                     field_name,
                     expected_type,
                     found_type,
-                    .. 
+                    ..
                 },
             ) => {
                 assert_eq!(field_name, "permissions");
@@ -1648,7 +1654,7 @@ mod tests {
                     field_name,
                     expected_type,
                     found_type,
-                    .. 
+                    ..
                 },
             ) => {
                 assert_eq!(field_name, "log_data");
@@ -1674,7 +1680,7 @@ mod tests {
                     field_name,
                     expected_type,
                     found_type,
-                    .. 
+                    ..
                 },
             ) => {
                 assert_eq!(field_name, "status_history");
@@ -1745,7 +1751,7 @@ mod tests {
                     field_name,
                     expected_type,
                     found_type,
-                    .. 
+                    ..
                 },
             ) => {
                 assert_eq!(field_name, "username");
@@ -1800,7 +1806,7 @@ mod tests {
                 LintConfig: #struct {
                     max_depth(Number) = 5
                 }
-            }"#, 
+            }"#,
         );
         let resolver = test_resolver_with_builtin(builtin_path.clone());
         // Test mon: URI resolution

@@ -623,7 +623,7 @@ mod tests {
         let input = r#"{ key: "unclosed }"#;
         let mut lexer = Lexer::new(input);
         let tokens = lexer.lex();
-        
+
         // Unclosed string should return Unknown token
         let has_unknown = tokens.iter().any(|t| matches!(t.ttype, TokenType::Unknown));
         assert!(has_unknown, "Should have Unknown token for unclosed string");
@@ -634,7 +634,7 @@ mod tests {
         let input = r#""hello\nworld\t\"test\"""#;
         let mut lexer = Lexer::new(input);
         let token = lexer.next_token();
-        
+
         match token.ttype {
             TokenType::String(s) => {
                 // The lexer actually processes the escapes
@@ -659,10 +659,10 @@ mod tests {
     fn test_number_with_exponent() {
         let input = "1.23e10 4.5E-3";
         let mut lexer = Lexer::new(input);
-        
+
         let tok1 = lexer.next_token();
         assert!(matches!(tok1.ttype, TokenType::Number(n) if (n - 1.23e10).abs() < 1e-6));
-        
+
         lexer.next_token(); // whitespace
         let tok2 = lexer.next_token();
         assert!(matches!(tok2.ttype, TokenType::Number(n) if (n - 4.5e-3).abs() < 1e-9));
@@ -670,10 +670,10 @@ mod tests {
 
     #[test]
     fn test_negative_numbers() {
-        let input = "-42 -3.14";
+        let input = "-42 -3.2";
         let expected = vec![
             TokenType::Number(-42.0),
-            TokenType::Number(-3.14),
+            TokenType::Number(-3.2),
             TokenType::Eof,
         ];
         assert_tokens(input, &expected);
@@ -685,8 +685,7 @@ mod tests {
         let input = "..";
         let mut lexer = Lexer::new(input);
         let tok1 = lexer.next_token();
-        let tok2 = lexer.next_token();
-        
+
         // First dot, then either another dot or unknown
         assert!(matches!(tok1.ttype, TokenType::Dot | TokenType::Unknown));
     }
@@ -696,7 +695,7 @@ mod tests {
         let input = "{ @invalid }";
         let mut lexer = Lexer::new(input);
         let tokens: Vec<TokenType> = lexer.lex().into_iter().map(|t| t.ttype).collect();
-        
+
         // Should have Unknown token for @
         assert!(tokens.iter().any(|t| matches!(t, TokenType::Unknown)));
     }
@@ -706,7 +705,7 @@ mod tests {
         let input = "test / value";
         let mut lexer = Lexer::new(input);
         let tokens: Vec<TokenType> = lexer.lex().into_iter().map(|t| t.ttype).collect();
-        
+
         // Single slash should produce Unknown
         assert!(tokens.iter().any(|t| matches!(t, TokenType::Unknown)));
     }
@@ -716,7 +715,7 @@ mod tests {
         let input = r#""test\rvalue""#;
         let mut lexer = Lexer::new(input);
         let token = lexer.next_token();
-        assert!(matches!(token.ttype, TokenType::String(s) if s.len() > 0));
+        assert!(matches!(token.ttype, TokenType::String(s) if !s.is_empty()));
     }
 
     #[test]
@@ -724,7 +723,7 @@ mod tests {
         let input = r#""test\\value""#;
         let mut lexer = Lexer::new(input);
         let token = lexer.next_token();
-        assert!(matches!(token.ttype, TokenType::String(s) if s.len() > 0));
+        assert!(matches!(token.ttype, TokenType::String(s) if !s.is_empty()));
     }
 
     #[test]
@@ -743,7 +742,7 @@ mod tests {
 
     #[test]
     fn test_decimal_point_only() {
-        assert_tokens("3.14", &[TokenType::Number(3.14), TokenType::Eof]);
+        assert_tokens("3.69", &[TokenType::Number(3.69), TokenType::Eof]);
     }
 
     #[test]
@@ -761,11 +760,16 @@ mod tests {
     fn test_multiline_comment() {
         let input = "// line 1\n// line 2\nvalue";
         let mut lexer = Lexer::new(input);
-        let tokens: Vec<TokenType> = lexer.lex().into_iter()
+        let tokens: Vec<TokenType> = lexer
+            .lex()
+            .into_iter()
             .filter(|t| !matches!(t.ttype, TokenType::Whitespace | TokenType::Comment(_)))
             .map(|t| t.ttype)
             .collect();
-        assert_eq!(tokens, vec![TokenType::Identifier("value".to_string()), TokenType::Eof]);
+        assert_eq!(
+            tokens,
+            vec![TokenType::Identifier("value".to_string()), TokenType::Eof]
+        );
     }
 
     #[test]
@@ -821,7 +825,9 @@ mod tests {
     fn test_adjacent_tokens_no_whitespace() {
         let input = "[1,2,3]";
         let mut lexer = Lexer::new(input);
-        let tokens: Vec<TokenType> = lexer.lex().into_iter()
+        let tokens: Vec<TokenType> = lexer
+            .lex()
+            .into_iter()
             .filter(|t| !matches!(t.ttype, TokenType::Whitespace))
             .map(|t| t.ttype)
             .collect();

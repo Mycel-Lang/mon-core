@@ -7,46 +7,46 @@
 //! ## Architectural Overview
 //!
 //! The error system is hierarchical:
-//! 
+//!
 //! 1.  **[`MonError`]**: This is the top-level, public-facing error enum. It wraps more
 //!     specific error types from different stages of the compilation pipeline.
 //!     Any function in the public API will typically return a `Result<T, MonError>`.
-//! 
+//!
 //! 2.  **Phase-Specific Errors:**
 //!     - [`ParserError`]: Errors that occur during the lexing or parsing phase, such as
 //!       syntax errors (e.g., an unexpected token).
 //!     - [`ResolverError`]: Errors that occur during the semantic analysis phase. This includes
 //!       failures like an import not being found, an anchor being undefined, or a circular dependency.
-//! 
+//!
 //! 3.  **[`ValidationError`]**: A specialized subset of resolver errors that occur specifically
 //!     during type validation. This includes type mismatches, missing or extra fields in structs,
 //!     and undefined enum variants.
-//! 
+//!
 //! ## Use Cases
-//! 
+//!
 //! When you use the `mon-core` library, you will primarily interact with `MonError`. You can
 //! match on its variants (`Parser` or `Resolver`) to determine the source of the failure.
-//! 
+//!
 //! The rich diagnostic information provided by `miette` allows for printing user-friendly,
 //! colorful error reports that point directly to the problematic code in the source file.
-//! 
+//!
 //! ## Example: Handling an Error
-//! 
+//!
 //! ```rust
 //! use mon_core::api::analyze;
-//! 
+//!
 //! // This source code has a syntax error (a missing comma).
 //! let source = "{ key1: \"value1\" key2: \"value2\" }";
-//! 
+//!
 //! let result = analyze(source, "bad.mon");
-//! 
+//!
 //! match result {
 //!     Ok(_) => println!("This should not have succeeded!"),
 //!     Err(err) => {
 //!         // You can render the beautiful, diagnostic error report.
 //!         // (Note: The actual output is a graphical report with colors and source snippets)
 //!         println!("{:?}", err);
-//! 
+//!
 //!         // You can also programmatically inspect the error.
 //!         match err {
 //!             mon_core::error::MonError::Parser(p_err) => {

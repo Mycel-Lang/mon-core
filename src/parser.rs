@@ -1045,6 +1045,7 @@ mod tests {
         assert!(matches!(pair.value.kind, MonValueKind::Number(_)));
     }
 
+    #[test]
     fn test_named_imports() {
         let doc = parse_ok(
             r#"import { A, &B, C } from "./types.mon"
@@ -1113,10 +1114,11 @@ Status: #enum { Active, Inactive, Pending }
         let doc = parse_ok(r#"{ key :: Number = 42 }"#);
         let pair = doc.root.kind.unwrap_object().remove(0).unwrap_pair();
 
-
         //                                                              should have been 69
-        assert_eq!(pair.validation.unwrap(), TypeSpec::Simple("Number".into(), (9, 6).into()))
-
+        assert_eq!(
+            pair.validation.unwrap(),
+            TypeSpec::Simple("Number".into(), (9, 6).into())
+        )
     }
 
     #[test]

@@ -1,8 +1,7 @@
-// API error path tests  
+// API error path tests
 // These test error handling, conversions, and edge cases in the API layer
 
 use mon_core::{analyze, error::MonError};
-use std::path::PathBuf;
 
 #[test]
 fn test_api_analyze_parse_error() {
