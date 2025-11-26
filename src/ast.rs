@@ -115,7 +115,7 @@ pub struct Pair {
     pub value: MonValue,
     /// An optional type specification used for validation, e.g., `key::String`.
     ///
-    /// [NOTE] This is lazily generated, check if it exists first
+    /// \[NOTE\] This is lazily generated, check if it exists first
     pub validation: Option<TypeSpec>,
 }
 
