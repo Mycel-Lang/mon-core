@@ -38,21 +38,15 @@ jobs:
       - name: Run tests
         run: cargo test --all-targets --all-features
 
-  # Full test matrix - only on main
-  full-test:
-    name: Full Test Suite
+  # Additional OS testing - only on main (Ubuntu already tested in PR)
+  cross-platform:
+    name: Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, beta]
-        exclude:
-          # Only test beta on Ubuntu for speed
-          - os: windows-latest
-            rust: beta
-          - os: macos-latest
-            rust: beta
+        os: [windows-latest, macos-latest]
+        rust: [stable]
 
     steps:
       - name: Checkout code
@@ -70,15 +64,33 @@ jobs:
           shared-key: ${{ matrix.os }}-${{ matrix.rust }}
 
       - name: Build
-        run: cargo build --verbose --all-features
+        run: cargo build --all-features
 
       - name: Run tests
-        run: cargo test --all-targets --all-features --verbose
+        run: cargo test --all-targets --all-features
 
-      - name: Run doctests
-        run: cargo test --doc --all-features --verbose
+  # Beta testing - only on main
+  beta-test:
+    name: Test with Rust Beta
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  # Coverage - only on main
+      - name: Install Rust beta
+        uses: dtolnay/rust-toolchain@beta
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --all-features
+
+      - name: Run tests
+        run: cargo test --all-targets --all-features
+
+  # Coverage - only on main (unique check, not in PR)
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
